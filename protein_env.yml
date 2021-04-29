@@ -1,0 +1,16 @@
+name: protein_env
+channels:
+  - pytorch
+  - anaconda
+  - defaults
+dependencies:
+  - python=3.7
+  - pytorch=1.7
+  - cudatoolkit=11.0
+  - scikit-learn=0.24.1
+  - numpy=1.20.1
+  - pandas=1.2.4
+  - scipy=1.6.2
+  - tqdm
+  - matplotlib
+  - seaborn
