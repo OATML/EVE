@@ -19,6 +19,8 @@ if __name__=='__main__':
     parser.add_argument('--training_logs_location', type=str, help='Location of VAE model parameters')
     args = parser.parse_args()
 
+    print("tmp: args=", args)
+
     mapping_file = pd.read_csv(args.MSA_list)
     protein_name = mapping_file['protein_name'][args.protein_index]
     msa_location = args.MSA_data_folder + os.sep + mapping_file['msa_location'][args.protein_index]
@@ -57,6 +59,8 @@ if __name__=='__main__':
 
     model_params["training_parameters"]['training_logs_location'] = args.training_logs_location
     model_params["training_parameters"]['model_checkpoint_location'] = args.VAE_checkpoint_location
+    
+    # model_params["training_parameters"]["num_training_steps"] = 1000 # todo temp debugging
 
     print("Starting to train model: " + model_name)
     model.train_model(data=data, training_parameters=model_params["training_parameters"])

@@ -176,7 +176,8 @@ class VAE_model(nn.Module):
         
         if training_parameters['log_training_info']:
             filename = training_parameters['training_logs_location']+os.sep+self.model_name+"_losses.csv"
-            with open(filename, "a") as logs:
+            os.makedirs(os.path.dirname(filename), exist_ok=True)
+            with open(filename, "a+") as logs:
                 logs.write("Number of sequences in alignment file:\t"+str(data.num_sequences)+"\n")
                 logs.write("Neff:\t"+str(self.Neff)+"\n")
                 logs.write("Alignment sequence length:\t"+str(data.seq_len)+"\n")
@@ -228,7 +229,7 @@ class VAE_model(nn.Module):
                 print(progress)
 
                 if training_parameters['log_training_info']:
-                    with open(filename, "a") as logs:
+                    with open(filename, "a+") as logs:
                         logs.write(progress+"\n")
 
             if training_step % training_parameters['save_model_params_freq']==0:
@@ -244,7 +245,7 @@ class VAE_model(nn.Module):
                 progress_val = "\t\t\t|Val : Update {0}. Negative ELBO : {1:.3f}, BCE: {2:.3f}, KLD_latent: {3:.3f}, KLD_decoder_params_norm: {4:.3f}, Time: {5:.2f} |".format(training_step, val_neg_ELBO, val_BCE, val_KLD_latent, val_KLD_global_parameters, time.time() - start)
                 print(progress_val)
                 if training_parameters['log_training_info']:
-                    with open(filename, "a") as logs:
+                    with open(filename, "a+") as logs:
                         logs.write(progress_val+"\n")
 
                 if val_neg_ELBO < best_val_loss:
@@ -275,6 +276,8 @@ class VAE_model(nn.Module):
         
 
     def save(self, model_checkpoint, encoder_parameters, decoder_parameters, training_parameters, batch_size=256):
+        # Create intermediate dirs above this
+        os.makedirs(os.path.dirname(model_checkpoint), exist_ok=True)
         torch.save({
             'model_state_dict':self.state_dict(),
             'encoder_parameters':encoder_parameters,
