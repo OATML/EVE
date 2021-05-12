@@ -1,9 +1,9 @@
+from collections import defaultdict
+
 import numpy as np
 import pandas as pd
-from collections import defaultdict
-import os
 import torch
-import tqdm
+
 
 class MSA_processing:
     def __init__(self,
@@ -16,13 +16,13 @@ class MSA_processing:
         threshold_focus_cols_frac_gaps=0.3,
         remove_sequences_with_indeterminate_AA_in_focus_cols=True
         ):
-        
+
         """
         Parameters:
         - msa_location: (path) Location of the MSA data. Constraints on input MSA format: 
             - focus_sequence is the first one in the MSA data
             - first line is structured as follows: ">focus_seq_name/start_pos-end_pos" (e.g., >SPIKE_SARS2/310-550)
-            - corespondding sequence data located on following line(s)
+            - corresponding sequence data located on following line(s)
             - then all other sequences follow with ">name" on first line, corresponding data on subsequent lines
         - theta: (float) Sequence weighting hyperparameter. Generally: Prokaryotic and eukaryotic families =  0.2; Viruses = 0.01
         - use_weights: (bool) If False, sets all sequence weights to 1. If True, checks weights_location -- if non empty uses that; 
@@ -48,6 +48,20 @@ class MSA_processing:
         self.threshold_focus_cols_frac_gaps = threshold_focus_cols_frac_gaps
         self.remove_sequences_with_indeterminate_AA_in_focus_cols = remove_sequences_with_indeterminate_AA_in_focus_cols
 
+        # Defined by gen_alignment
+        self.aa_dict = {}
+        self.focus_seq_name = ""
+        self.seq_name_to_sequence = defaultdict(str)
+        self.focus_seq, self.focus_cols, self.focus_seq_trimmed, self.seq_len, self.alphabet_size = [None] * 5
+        self.focus_start_loc, self.focus_stop_loc = None, None
+        self.uniprot_focus_col_to_wt_aa_dict, self.uniprot_focus_col_to_focus_idx = None, None
+        self.one_hot_encoding, self.weights, self.Neff, self.num_sequences = [None] * 4
+
+        # Defined by create_all_singles
+        self.mutant_to_letter_pos_idx_focus_list = None
+        self.all_single_mutations = None
+
+        # Fill in the instance variables
         self.gen_alignment()
         self.create_all_singles()
 
@@ -69,7 +83,6 @@ class MSA_processing:
                 else:
                     self.seq_name_to_sequence[name] += line
 
-        
         ## MSA pre-processing to remove inadequate columns and sequences
         if self.preprocess_MSA:
             msa_df = pd.DataFrame.from_dict(self.seq_name_to_sequence, orient='index', columns=['sequence'])
@@ -99,7 +112,7 @@ class MSA_processing:
                 self.seq_name_to_sequence[msa_df.index[seq_idx]] = msa_df.sequence[seq_idx]
 
         self.focus_seq = self.seq_name_to_sequence[self.focus_seq_name]
-        self.focus_cols = [ix for ix, s in enumerate(self.focus_seq) if s == s.upper() and s!='-'] 
+        self.focus_cols = [ix for ix, s in enumerate(self.focus_seq) if s == s.upper() and s!='-']
         self.focus_seq_trimmed = [self.focus_seq[ix] for ix in self.focus_cols]
         self.seq_len = len(self.focus_cols)
         self.alphabet_size = len(self.alphabet)
@@ -110,14 +123,14 @@ class MSA_processing:
         self.focus_start_loc = int(start)
         self.focus_stop_loc = int(stop)
         self.uniprot_focus_col_to_wt_aa_dict \
-            = {idx_col+int(start):self.focus_seq[idx_col] for idx_col in self.focus_cols} 
+            = {idx_col+int(start):self.focus_seq[idx_col] for idx_col in self.focus_cols}
         self.uniprot_focus_col_to_focus_idx \
-            = {idx_col+int(start):idx_col for idx_col in self.focus_cols} 
+            = {idx_col+int(start):idx_col for idx_col in self.focus_cols}
 
         # Move all letters to CAPS; keeps focus columns only
         for seq_name,sequence in self.seq_name_to_sequence.items():
             sequence = sequence.replace(".","-")
-            self.seq_name_to_sequence[seq_name] = [sequence[ix].upper() for ix in self.focus_cols]
+            self.seq_name_to_sequence[seq_name] = "".join([sequence[ix].upper() for ix in self.focus_cols])  # Makes a List[str] instead of str
 
         # Remove sequences that have indeterminate AA (e.g., B, J, X, Z) in the focus columns
         if self.remove_sequences_with_indeterminate_AA_in_focus_cols:
@@ -134,13 +147,18 @@ class MSA_processing:
 
         # Encode the sequences
         print ("Encoding sequences")
-        self.one_hot_encoding = np.zeros((len(self.seq_name_to_sequence.keys()),len(self.focus_cols),len(self.alphabet)))
-        for i,seq_name in enumerate(self.seq_name_to_sequence.keys()):
-            sequence = self.seq_name_to_sequence[seq_name]
-            for j,letter in enumerate(sequence):
-                if letter in self.aa_dict: 
-                    k = self.aa_dict[letter]
-                    self.one_hot_encoding[i,j,k] = 1.0
+        self.one_hot_encoding = one_hot_3D(
+            seq_keys=self.seq_name_to_sequence.keys(),
+            seq_name_to_sequence=self.seq_name_to_sequence,
+            msa_data=self,  # Simply pass ourselves as the msa_data object
+        )
+        # self.one_hot_encoding = np.zeros((len(self.seq_name_to_sequence.keys()),len(self.focus_cols),len(self.alphabet)))
+        # for i,seq_name in enumerate(self.seq_name_to_sequence.keys()):
+        #     sequence = self.seq_name_to_sequence[seq_name]
+        #     for j,letter in enumerate(sequence):
+        #         if letter in self.aa_dict:
+        #             k = self.aa_dict[letter]
+        #             self.one_hot_encoding[i,j,k] = 1.0
 
         if self.use_weights:
             try:
@@ -153,8 +171,8 @@ class MSA_processing:
                 def compute_weight(seq):
                     number_non_empty_positions = np.dot(seq,seq)
                     if number_non_empty_positions>0:
-                        denom = np.dot(list_seq,seq) / np.dot(seq,seq) 
-                        denom = np.sum(denom > 1 - self.theta) 
+                        denom = np.dot(list_seq,seq) / np.dot(seq,seq)
+                        denom = np.sum(denom > 1 - self.theta)
                         return 1/denom
                     else:
                         return 0.0 #return 0 weight if sequence is fully empty
@@ -170,7 +188,7 @@ class MSA_processing:
 
         print ("Neff =",str(self.Neff))
         print ("Data Shape =",self.one_hot_encoding.shape)
-    
+
     def create_all_singles(self):
         start_idx = self.focus_start_loc
         focus_seq_index = 0
@@ -186,7 +204,7 @@ class MSA_processing:
                         mutant = letter+str(pos)+mut
                         self.mutant_to_letter_pos_idx_focus_list[mutant] = [letter, pos, focus_seq_index]
                         list_valid_mutations.append(mutant)
-                focus_seq_index += 1   
+                focus_seq_index += 1
         self.all_single_mutations = list_valid_mutations
 
     def save_all_singles(self, output_filename):
@@ -195,3 +213,57 @@ class MSA_processing:
             for mutation in self.all_single_mutations:
                 output.write('\n')
                 output.write(mutation)
+
+
+def generate_mutated_sequences(msa_data, list_mutations):
+    """
+    Copied from VAE_model.compute_evol_indices.
+
+    Generate mutated sequences using a MSAProcessing data object and list of mutations of the form "A42T" where position
+    42 on the wild type is changed from A to T.
+    Multiple mutations are separated by colons e.g. "A42T:C9A"
+
+    Returns a tuple (list_valid_mutations, list_valid_mutated_sequences)
+    TODO give example, I've already forgotten
+    """
+    list_valid_mutations = ['wt']
+    valid_mutated_sequences = {}
+    valid_mutated_sequences['wt'] = msa_data.focus_seq_trimmed  # first sequence in the list is the wild_type
+
+    # Remove (multiple) mutations that are invalid
+    for mutation in list_mutations:
+        individual_substitutions = mutation.split(':')
+        mutated_sequence = list(msa_data.focus_seq_trimmed)[:]
+        fully_valid_mutation = True
+        for mut in individual_substitutions:
+            wt_aa, pos, mut_aa = mut[0], int(mut[1:-1]), mut[-1]
+            if pos not in msa_data.uniprot_focus_col_to_wt_aa_dict or msa_data.uniprot_focus_col_to_wt_aa_dict[pos] != wt_aa or mut not in msa_data.mutant_to_letter_pos_idx_focus_list:
+                print("Not a valid mutant: " + mutation)
+                fully_valid_mutation = False
+                break
+            else:
+                wt_aa, pos, idx_focus = msa_data.mutant_to_letter_pos_idx_focus_list[mut]
+                mutated_sequence[idx_focus] = mut_aa  # perform the corresponding AA substitution
+
+        if fully_valid_mutation:
+            list_valid_mutations.append(mutation)
+            valid_mutated_sequences[mutation] = ''.join(mutated_sequence)
+
+    return list_valid_mutations, valid_mutated_sequences
+
+
+# Copied from VAE_model.compute_evol_indices
+# One-hot encoding of sequences
+def one_hot_3D(seq_keys, seq_name_to_sequence, msa_data):
+    """
+    Take in a list of sequence names and corresponding sequences, and generate a one-hot array according to an alphabet.
+    """
+    one_hot_out = np.zeros((len(seq_keys), len(msa_data.focus_cols), len(msa_data.alphabet)))
+    for i,mutation in enumerate(seq_keys):
+        sequence = seq_name_to_sequence[mutation]
+        for j,letter in enumerate(sequence):
+            if letter in msa_data.aa_dict:
+                k = msa_data.aa_dict[letter]
+                one_hot_out[i,j,k] = 1.0
+    one_hot_out = torch.tensor(one_hot_out)
+    return one_hot_out
