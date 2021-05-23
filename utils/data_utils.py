@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import torch
 
-
 class MSA_processing:
     def __init__(self,
         MSA_location="",
@@ -19,15 +18,15 @@ class MSA_processing:
 
         """
         Parameters:
-        - msa_location: (path) Location of the MSA data. Constraints on input MSA format: 
+        - msa_location: (path) Location of the MSA data. Constraints on input MSA format:
             - focus_sequence is the first one in the MSA data
             - first line is structured as follows: ">focus_seq_name/start_pos-end_pos" (e.g., >SPIKE_SARS2/310-550)
             - corresponding sequence data located on following line(s)
             - then all other sequences follow with ">name" on first line, corresponding data on subsequent lines
         - theta: (float) Sequence weighting hyperparameter. Generally: Prokaryotic and eukaryotic families =  0.2; Viruses = 0.01
-        - use_weights: (bool) If False, sets all sequence weights to 1. If True, checks weights_location -- if non empty uses that; 
+        - use_weights: (bool) If False, sets all sequence weights to 1. If True, checks weights_location -- if non empty uses that;
             otherwise compute weights from scratch and store them at weights_location
-        - weights_location: (path) Location to load from/save to the sequence weights
+        - weights_location: (path) File to load from/save to the sequence weights
         - preprocess_MSA: (bool) performs pre-processing of MSA to remove short fragments and positions that are not well covered.
         - threshold_sequence_frac_gaps: (float, between 0 and 1) Threshold value to define fragments
             - sequences with a fraction of gap characters above threshold_sequence_frac_gaps are removed
@@ -82,6 +81,7 @@ class MSA_processing:
                         self.focus_seq_name = name
                 else:
                     self.seq_name_to_sequence[name] += line
+        print("Number of sequences in MSA (before preprocessing):", len(self.seq_name_to_sequence))
 
         ## MSA pre-processing to remove inadequate columns and sequences
         if self.preprocess_MSA:
@@ -91,8 +91,8 @@ class MSA_processing:
             # Remove columns that would be gaps in the wild type
             non_gap_wt_cols = [aa!='-' for aa in msa_df.sequence[self.focus_seq_name]]
             msa_df['sequence'] = msa_df['sequence'].apply(lambda x: ''.join([aa for aa,non_gap_ind in zip(x, non_gap_wt_cols) if non_gap_ind]))
-            assert 0.0 <= self.threshold_sequence_frac_gaps <= 1.0,"Invalid fragment filtering parameter"
-            assert 0.0 <= self.threshold_focus_cols_frac_gaps <= 1.0,"Invalid focus position filtering parameter"
+            assert 0.0 <= self.threshold_sequence_frac_gaps <= 1.0, "Invalid fragment filtering parameter"
+            assert 0.0 <= self.threshold_focus_cols_frac_gaps <= 1.0, "Invalid focus position filtering parameter"
             msa_array = np.array([list(seq) for seq in msa_df.sequence])
             gaps_array = np.array(list(map(lambda seq: [aa=='-' for aa in seq], msa_array)))
             # Identify fragments with too many gaps
@@ -113,7 +113,7 @@ class MSA_processing:
 
         self.focus_seq = self.seq_name_to_sequence[self.focus_seq_name]
         self.focus_cols = [ix for ix, s in enumerate(self.focus_seq) if s == s.upper() and s!='-']
-        self.focus_seq_trimmed = [self.focus_seq[ix] for ix in self.focus_cols]
+        self.focus_seq_trimmed = "".join([self.focus_seq[ix] for ix in self.focus_cols])
         self.seq_len = len(self.focus_cols)
         self.alphabet_size = len(self.alphabet)
 
@@ -146,7 +146,7 @@ class MSA_processing:
                 del self.seq_name_to_sequence[seq_name]
 
         # Encode the sequences
-        print ("Encoding sequences")
+        print("One-hot encoding sequences")
         self.one_hot_encoding = one_hot_3D(
             seq_keys=self.seq_name_to_sequence.keys(),
             seq_name_to_sequence=self.seq_name_to_sequence,
@@ -223,8 +223,8 @@ def generate_mutated_sequences(msa_data, list_mutations):
     42 on the wild type is changed from A to T.
     Multiple mutations are separated by colons e.g. "A42T:C9A"
 
-    Returns a tuple (list_valid_mutations, list_valid_mutated_sequences)
-    TODO give example, I've already forgotten
+    Returns a tuple (list_valid_mutations, valid_mutated_sequences),
+    e.g. (['wt', 'A3T'], {'wt': 'AGAKLI', 'A3T': 'AGTKLI'})
     """
     list_valid_mutations = ['wt']
     valid_mutated_sequences = {}
