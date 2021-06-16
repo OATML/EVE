@@ -23,7 +23,10 @@ class VAE_model(nn.Module):
             data,
             encoder_parameters,
             decoder_parameters,
-            random_seed
+            random_seed,
+            seq_len=None,
+            alphabet_size=None,
+            Neff=None,
             ):
         
         super().__init__()
@@ -34,9 +37,9 @@ class VAE_model(nn.Module):
         self.random_seed = random_seed
         torch.manual_seed(random_seed)
         
-        self.seq_len = data.seq_len
-        self.alphabet_size = data.alphabet_size
-        self.Neff = data.Neff
+        self.seq_len = seq_len if seq_len is not None else data.seq_len
+        self.alphabet_size = alphabet_size if alphabet_size is not None else data.alphabet_size
+        self.Neff = Neff if Neff is not None else data.Neff
 
         encoder_parameters['seq_len'] = self.seq_len
         encoder_parameters['alphabet_size'] = self.alphabet_size

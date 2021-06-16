@@ -27,6 +27,8 @@ if __name__=='__main__':
     parser.add_argument('--batch_size', default=256, type=int, help='Batch size when computing evol indices')
     args = parser.parse_args()
 
+    print("tmp args=", args)
+
     mapping_file = pd.read_csv(args.MSA_list)
     protein_name = mapping_file['protein_name'][args.protein_index]
     msa_location = args.MSA_data_folder + os.sep + mapping_file['msa_location'][args.protein_index]
@@ -56,25 +58,25 @@ if __name__=='__main__':
     model_name = protein_name + "_" + args.model_name_suffix
     print("Model name: "+str(model_name))
 
-    model_params = json.load(open(args.model_parameters_location))
+    # model_params = json.load(open(args.model_parameters_location))
+
+    checkpoint_name = str(args.VAE_checkpoint_location) + os.sep + model_name + "_final"
+    print("tmp looking for ", checkpoint_name, os.path.isfile(checkpoint_name))
+    assert os.path.isdir(args.VAE_checkpoint_location), "Cannot find dir"+args.VAE_checkpoint_location
+    assert os.path.isfile(checkpoint_name), "Cannot find "+checkpoint_name+".\nOther options: "+str([f for f in os.listdir('.') if os.path.isfile(f)])
+    checkpoint = torch.load(checkpoint_name)
 
     model = VAE_model.VAE_model(
                     model_name=model_name,
                     data=data,
-                    encoder_parameters=model_params["encoder_parameters"],
-                    decoder_parameters=model_params["decoder_parameters"],
+                    encoder_parameters=checkpoint["encoder_parameters"],
+                    decoder_parameters=checkpoint["decoder_parameters"],
                     random_seed=42
     )
     model = model.to(model.device)
 
-    try:
-        checkpoint_name = str(args.VAE_checkpoint_location) + os.sep + model_name + "_final"
-        checkpoint = torch.load(checkpoint_name)
-        model.load_state_dict(checkpoint['model_state_dict'])
-        print("Initialized VAE with checkpoint '{}' ".format(checkpoint_name))
-    except:
-        print("Unable to locate VAE model checkpoint")
-        sys.exit(0)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    print("Initialized VAE with checkpoint '{}' ".format(checkpoint_name))
     
     list_valid_mutations, evol_indices, _, _ = model.compute_evol_indices(msa_data=data,
                                                     list_mutations_location=args.mutations_location, 
@@ -93,3 +95,4 @@ if __name__=='__main__':
     except:
         keep_header=True 
     df.to_csv(path_or_buf=evol_indices_output_filename, index=False, mode='a', header=keep_header)
+    print("Script completed successfully.")
