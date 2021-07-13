@@ -232,6 +232,8 @@ def main(model_checkpoint,
         validation_metrics = {"mse": []}
 
         for training_step in tqdm.tqdm(range(1, num_training_steps+1), desc="Training linear reg model"):
+            optimizer.zero_grad()
+
             # Linear model + joint training
             if training_step % lm_training_frequency == 0:
                 x, y = x_train_labeled, y_train_labeled
@@ -259,8 +261,6 @@ def main(model_checkpoint,
 
                 x = torch.as_tensor(x_train[batch_sample_index], dtype=torch.float, device=device)
                 # y = torch.as_tensor(y_train[batch_sample_index], dtype=torch.float, device=device)
-
-                optimizer.zero_grad()
 
                 # Unsupervised training
                 mu, log_var, z, lm_pred = vae_aux.forward(x)
