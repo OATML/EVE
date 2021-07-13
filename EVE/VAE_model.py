@@ -140,8 +140,21 @@ class VAE_model(nn.Module):
             KLD_decoder_params_normalized = self.KLD_global_parameters() / Neff
         else:
             KLD_decoder_params_normalized = 0.0
-        warm_up_scale = self.annealing_factor(annealing_warm_up,training_step)
+        warm_up_scale = self.annealing_factor(annealing_warm_up, training_step)
         neg_ELBO = BCE + warm_up_scale * (kl_latent_scale * KLD_latent + kl_global_params_scale * KLD_decoder_params_normalized)
+        return neg_ELBO, BCE, KLD_latent, KLD_decoder_params_normalized
+
+    def beta_vae_loss(self, x_recon_log, x, mu, log_var, kl_latent_scale, kl_global_params_scale, annealing_warm_up, training_step, Neff, beta):
+        """Loss from beta-vae paper, but added bayesian decoder prior & KL annealing to match previous loss function"""
+
+        BCE = F.binary_cross_entropy_with_logits(x_recon_log, x, reduction='sum') / x.shape[0]
+        KLD_latent = (-0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp())) / x.shape[0]
+        if self.decoder.bayesian_decoder:
+            KLD_decoder_params_normalized = self.KLD_global_parameters() / Neff
+        else:
+            KLD_decoder_params_normalized = 0.0
+        warm_up_scale = self.annealing_factor(annealing_warm_up, training_step)
+        neg_ELBO = BCE + warm_up_scale * (beta * kl_latent_scale * KLD_latent + kl_global_params_scale * KLD_decoder_params_normalized)
         return neg_ELBO, BCE, KLD_latent, KLD_decoder_params_normalized
     
     def all_likelihood_components(self, x):
@@ -182,7 +195,7 @@ class VAE_model(nn.Module):
                 logs.write("Neff:\t"+str(self.Neff)+"\n")
                 logs.write("Alignment sequence length:\t"+str(data.seq_len)+"\n")
 
-        optimizer = optim.Adam(self.parameters(), lr=training_parameters['learning_rate'], weight_decay = training_parameters['l2_regularization'])
+        optimizer = optim.Adam(self.parameters(), lr=training_parameters['learning_rate'], weight_decay=training_parameters['l2_regularization'])
         
         if training_parameters['use_lr_scheduler']:
             scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=training_parameters['lr_scheduler_step_size'], gamma=training_parameters['lr_scheduler_gamma'])
@@ -201,13 +214,13 @@ class VAE_model(nn.Module):
         seq_sample_probs = weights_train / np.sum(weights_train)
 
         self.Neff_training = np.sum(weights_train)
-        N_training =  x_train.shape[0]
+        N_training = x_train.shape[0]
         
         start = time.time()
         train_loss = 0
         
         for training_step in tqdm.tqdm(range(1,training_parameters['num_training_steps']+1), desc="Training model"):
-
+            # Sample a batch according to sequence weight
             batch_index = np.random.choice(batch_order, training_parameters['batch_size'], p=seq_sample_probs).tolist()
             x = torch.tensor(x_train[batch_index], dtype=self.dtype).to(self.device)
             optimizer.zero_grad()
@@ -215,8 +228,10 @@ class VAE_model(nn.Module):
             mu, log_var = self.encoder(x)
             z = self.sample_latent(mu, log_var)
             recon_x_log = self.decoder(z)
-            
-            neg_ELBO, BCE, KLD_latent, KLD_decoder_params_normalized = self.loss_function(recon_x_log, x, mu, log_var, training_parameters['kl_latent_scale'], training_parameters['kl_global_params_scale'], training_parameters['annealing_warm_up'], training_step, self.Neff_training)
+
+            beta = training_parameters.get('beta', 1)  # Normal VAE loss is beta = 1
+
+            neg_ELBO, BCE, KLD_latent, KLD_decoder_params_normalized = self.beta_vae_loss(recon_x_log, x, mu, log_var, training_parameters['kl_latent_scale'], training_parameters['kl_global_params_scale'], training_parameters['annealing_warm_up'], training_step, self.Neff_training, beta=beta)
             
             neg_ELBO.backward()
             optimizer.step()
@@ -273,7 +288,6 @@ class VAE_model(nn.Module):
             neg_ELBO, BCE, KLD_latent, KLD_global_parameters = self.loss_function(recon_x_log, x, mu, log_var, kl_latent_scale=1.0, kl_global_params_scale=1.0, annealing_warm_up=0, training_step=1, Neff = self.Neff_training) #set annealing factor to 1
             
         return neg_ELBO.item(), BCE.item(), KLD_latent.item(), KLD_global_parameters.item()
-        
 
     def save(self, model_checkpoint, encoder_parameters, decoder_parameters, training_parameters, batch_size=256):
         # Create intermediate dirs above this

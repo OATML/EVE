@@ -258,12 +258,30 @@ def one_hot_3D(seq_keys, seq_name_to_sequence, msa_data):
     """
     Take in a list of sequence names and corresponding sequences, and generate a one-hot array according to an alphabet.
     """
+    aa_dict = {letter: i for (i, letter) in enumerate(msa_data.alphabet)}
+
     one_hot_out = np.zeros((len(seq_keys), len(msa_data.focus_cols), len(msa_data.alphabet)))
     for i,mutation in enumerate(seq_keys):
         sequence = seq_name_to_sequence[mutation]
         for j,letter in enumerate(sequence):
-            if letter in msa_data.aa_dict:
-                k = msa_data.aa_dict[letter]
+            if letter in aa_dict:
+                k = aa_dict[letter]
                 one_hot_out[i,j,k] = 1.0
     one_hot_out = torch.tensor(one_hot_out)
     return one_hot_out
+
+
+def gen_one_hot_to_sequence(one_hot_tensor, alphabet):
+    """Reverse of one_hot_3D. Need the msa_data again. Returns a list of sequences."""
+    for seq_tensor in one_hot_tensor:  # iterate through outer dimension
+        seq = ""
+        letters_idx = seq_tensor.argmax(-1)
+
+        for idx in letters_idx.tolist():  # Could also do map(di.get, letters_idx)
+            letter = alphabet[idx]
+            seq += letter
+        yield seq
+
+
+def one_hot_to_sequence_list(one_hot_tensor, alphabet):
+    return list(gen_one_hot_to_sequence(one_hot_tensor, alphabet))
