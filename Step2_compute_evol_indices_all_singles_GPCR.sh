@@ -4,7 +4,7 @@
 
 #SBATCH --output=./slurm_stdout/slurm-pn-%j.out
 #SBATCH --error=./slurm_stdout/slurm-pn-%j.err
-#SBATCH --job-name="evol_idx_lood_pten"
+#SBATCH --job-name="evol_idx_lood_adrb2"
 
 # #SBATCH --nodelist=oat0
 #SBATCH --array=0  # Used for protein index, useful when creating job arrays?
@@ -26,7 +26,7 @@ export MSA_data_folder=$EVE_REPO/data/MSA/
 export MSA_list=$EVE_REPO/data/mappings/mapping_adrb2.csv
 export MSA_weights_location=$EVE_REPO/data/weights/
 export VAE_checkpoint_location=$EVE_REPO/results/VAE_checkpoints/
-export model_name_suffix='lood5May'
+export model_name_suffix='lood11May'
 export model_parameters_location=$EVE_REPO/EVE/default_model_params.json
 export training_logs_location=$EVE_REPO/logs/$model_name_suffix
 export protein_index=0
