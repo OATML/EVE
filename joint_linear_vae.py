@@ -28,7 +28,7 @@ from utils import data_utils
 def main(model_checkpoint,
          msa_location,
          natural_labels_path,
-         model_parameters_location,
+         model_params,
          training_logs_location,
          plot_save_dir=None,
          # Cross-validation options
@@ -46,8 +46,6 @@ def main(model_checkpoint,
     PLOT_SAVE_DIR = plot_save_dir
 
     os.makedirs(training_logs_location, exist_ok=True)
-
-    assert os.path.isfile(model_parameters_location), model_parameters_location
 
     if PLOT_SAVE_DIR:
         assert os.path.exists(PLOT_SAVE_DIR), PLOT_SAVE_DIR
@@ -84,8 +82,6 @@ def main(model_checkpoint,
     print(len(msa_merged_df), 'rows')
 
     ############################
-
-    model_params = json.load(open(model_parameters_location))
 
     MODEL_CHECKPOINT = model_checkpoint
     assert os.path.isfile(MODEL_CHECKPOINT), f"{MODEL_CHECKPOINT} is not a file."
@@ -154,6 +150,7 @@ def main(model_checkpoint,
 
     print("Joint training taking turns between unsupervised and labelled samples")
 
+    lm_loss_weight = 1000
 
     # def evaluate(x, y):
     #     vae_aux.eval()
@@ -198,10 +195,10 @@ def main(model_checkpoint,
         vae_aux.to(device)
         vae_aux.train()
 
-        print("tmp weights init:", vae_aux.lm.weight)
+        print("tmp weights init:", vae_aux.lm.weight, vae_aux.lm.bias)
 
         # Optimize over all parameters (VAE + prediction model)
-        optimizer = torch.optim.Adam(vae_aux.parameters(), lr=training_parameters['learning_rate'],
+        optimizer = torch.optim.Adam(vae_aux.parameters(), lr=training_parameters['learning_rate']/10,  # Lower learning rate for training
                                      weight_decay=training_parameters['l2_regularization'])
         vae_aux.train()
 
@@ -231,55 +228,89 @@ def main(model_checkpoint,
         training_metrics = {"mse": [], "neg_ELBO": [], "BCE": []}  # "r2": [],
         validation_metrics = {"mse": []}
 
+        # Init the bias for better convergence?
+        vae_aux.lm.bias.data = torch.mean(y_train_labeled, dim=0)
+        mean = torch.mean(y_train_labeled, dim=0, keepdim=True)
+        print("mean shape before: ", mean.size())
+        baseline_pred = mean.expand(y_test_labeled.size())  # Broadcast mean up to N predictions, match shape for MSE loss
+        print("baseline shape:", baseline_pred.size())
+        print("Baseline mse (by predicting only mean):", torch.nn.MSELoss()(baseline_pred, y_test_labeled))
+
         for training_step in tqdm.tqdm(range(1, num_training_steps+1), desc="Training linear reg model"):
             optimizer.zero_grad()
 
-            # Linear model + joint training
-            if training_step % lm_training_frequency == 0:
-                x, y = x_train_labeled, y_train_labeled
+            # Train together in same batch
+            prop_batch_labeled = 0.5
+            num_labeled = int(training_parameters['batch_size'] * prop_batch_labeled)
+            sample_index_labeled = np.random.randint(0, x_train_labeled.shape[0], size=num_labeled).tolist()
+            batch_labeled = x_train_labeled[sample_index_labeled]
+            batch_labeled_y = y_train_labeled[sample_index_labeled]
 
-                mu, log_var, z, lm_pred = vae_aux.forward(x)
-                mse = torch.nn.MSELoss()(lm_pred, y)  # Can also do sigmoid loss for soft classification from -2 to 0?
-                loss = 10*mse
+            # Sample unlabeled
+            sample_index_unlabeled = np.random.choice(batch_order, training_parameters['batch_size']-num_labeled, p=seq_sample_probs).tolist()
+            batch_unlabeled = x_train[sample_index_unlabeled]
 
-                # Random thought: Can you optimize encoder and decoder separately? e.g. KL div one step, recon_x next step? In this case we might want to just optimize encoder + linear model.
-                if lm_elbo_together:
-                    recon_x_log = vae_aux.vae_model.decoder(z)
-                    neg_ELBO, BCE, KLD_latent, KLD_decoder_params_normalized = vae_aux.vae_model.loss_function(recon_x_log, x, mu, log_var, training_parameters['kl_latent_scale'], training_parameters['kl_global_params_scale'], training_parameters['annealing_warm_up'], prev_num_steps + training_step, Neff_training)
-                    loss = neg_ELBO + 10 * mse  # Can weight these appropriately: Since lr * 100 worked before, can we just do loss*100?
+            batch = torch.cat((batch_labeled, batch_unlabeled))
 
-                    training_metrics["neg_ELBO"].append(neg_ELBO.item())
-                    training_metrics["BCE"].append(BCE.item())
+            mu, log_var, z, lm_pred = vae_aux.forward(batch)
+            recon_x_log = vae_aux.vae_model.decoder(z)
+            neg_ELBO, BCE, KLD_latent, KLD_decoder_params_normalized = vae_aux.vae_model.loss_function(recon_x_log, batch, mu, log_var, training_parameters['kl_latent_scale'], training_parameters['kl_global_params_scale'], training_parameters['annealing_warm_up'], prev_num_steps + training_step, Neff_training)
 
-                training_metrics["mse"].append(mse.item())
-                print(training_step, "Training mse:", mse.item())
-            #             print(training_step, "Training R^2:", r2_score(y, lm_pred.detach().numpy()))
-            else:
-                # Sample a batch according to sequence weight (note: this will also affect the weights of the regression?)
-                batch_sample_index = np.random.choice(batch_order, training_parameters['batch_size'],
-                                                      p=seq_sample_probs).tolist()
+            mse = torch.nn.MSELoss()(lm_pred[sample_index_labeled], batch_labeled_y)
+            loss = neg_ELBO + lm_loss_weight * mse  # Can weight these appropriately: Since lr * 100 worked before, can we just do loss*100?
 
-                x = torch.as_tensor(x_train[batch_sample_index], dtype=torch.float, device=device)
-                # y = torch.as_tensor(y_train[batch_sample_index], dtype=torch.float, device=device)
+            training_metrics["neg_ELBO"].append(neg_ELBO.item())
+            training_metrics["BCE"].append(BCE.item())
+            training_metrics['mse'].append(mse.item())
+            print(training_step, "Training mse:", mse.item())
 
-                # Unsupervised training
-                mu, log_var, z, lm_pred = vae_aux.forward(x)
-                recon_x_log = vae_aux.vae_model.decoder(z)
-                neg_ELBO, BCE, KLD_latent, KLD_decoder_params_normalized = vae_aux.vae_model.loss_function(recon_x_log, x,
-                                                                                                           mu, log_var,
-                                                                                                           training_parameters[
-                                                                                                               'kl_latent_scale'],
-                                                                                                           training_parameters[
-                                                                                                               'kl_global_params_scale'],
-                                                                                                           training_parameters[
-                                                                                                               'annealing_warm_up'],
-                                                                                                           prev_num_steps + training_step,
-                                                                                                           Neff_training)
 
-                loss = neg_ELBO
-
-                training_metrics["neg_ELBO"].append(neg_ELBO.item())
-                training_metrics["BCE"].append(BCE.item())
+            # # Linear model + joint training
+            # if training_step % lm_training_frequency == 0:
+            #     x, y = x_train_labeled, y_train_labeled
+            #
+            #     mu, log_var, z, lm_pred = vae_aux.forward(x)
+            #     mse = torch.nn.MSELoss()(lm_pred, y)  # Can also do sigmoid loss for soft classification from -2 to 0?
+            #     loss = 10*mse
+            #
+            #     # Random thought: Can you optimize encoder and decoder separately? e.g. KL div one step, recon_x next step? In this case we might want to just optimize encoder + linear model.
+            #     if lm_elbo_together:
+            #         recon_x_log = vae_aux.vae_model.decoder(z)
+            #         neg_ELBO, BCE, KLD_latent, KLD_decoder_params_normalized = vae_aux.vae_model.loss_function(recon_x_log, x, mu, log_var, training_parameters['kl_latent_scale'], training_parameters['kl_global_params_scale'], training_parameters['annealing_warm_up'], prev_num_steps + training_step, Neff_training)
+            #         loss = neg_ELBO + 10 * mse  # Can weight these appropriately: Since lr * 100 worked before, can we just do loss*100?
+            #
+            #         training_metrics["neg_ELBO"].append(neg_ELBO.item())
+            #         training_metrics["BCE"].append(BCE.item())
+            #
+            #     training_metrics["mse"].append(mse.item())
+            #     print(training_step, "Training mse:", mse.item())
+            # #             print(training_step, "Training R^2:", r2_score(y, lm_pred.detach().numpy()))
+            # else:
+            #     # Sample a batch according to sequence weight
+            #     batch_sample_index = np.random.choice(batch_order, training_parameters['batch_size'],
+            #                                           p=seq_sample_probs).tolist()
+            #
+            #     x = x_train[batch_sample_index]
+            #     # y = y_train[batch_sample_index]
+            #
+            #     # Unsupervised training
+            #     mu, log_var, z, lm_pred = vae_aux.forward(x)
+            #     recon_x_log = vae_aux.vae_model.decoder(z)
+            #     neg_ELBO, BCE, KLD_latent, KLD_decoder_params_normalized = vae_aux.vae_model.loss_function(recon_x_log, x,
+            #                                                                                                mu, log_var,
+            #                                                                                                training_parameters[
+            #                                                                                                    'kl_latent_scale'],
+            #                                                                                                training_parameters[
+            #                                                                                                    'kl_global_params_scale'],
+            #                                                                                                training_parameters[
+            #                                                                                                    'annealing_warm_up'],
+            #                                                                                                prev_num_steps + training_step,
+            #                                                                                                Neff_training)
+            #
+            #     loss = neg_ELBO
+            #
+            #     training_metrics["neg_ELBO"].append(neg_ELBO.item())
+            #     training_metrics["BCE"].append(BCE.item())
 
             loss.backward()
             optimizer.step()
@@ -313,7 +344,8 @@ def main(model_checkpoint,
         print("tmp", y_pred_all.cpu().numpy()[:10])
         print("tmp", y_test_all.cpu().numpy()[:10])
 
-        df = pd.DataFrame.from_dict({'pred': y_pred_all.cpu().numpy(), 'test': y_test_all.cpu().numpy()}, orient='columns')
+        # using .squeeze() to remove the extra dimensions of size 1 e.g. [N, 1] -> [N], because pandas requires 1D arrays
+        df = pd.DataFrame.from_dict({'pred': y_pred_all.cpu().numpy().squeeze(), 'test': y_test_all.cpu().numpy().squeeze()}, orient='columns')
         df.to_csv(csv_path)
 
 
@@ -331,6 +363,7 @@ if __name__ == "__main__":
     parser.add_argument('--labels_path', type=str, help='Labels for linear regression in this case')
     # Cross-validation/training options
     parser.add_argument('--num_training_steps', type=int, help="Number of steps of fine-tuning")
+    parser.add_argument('--z_dim', type=int, help='Specify a different latent dim than in the params file')
     parser.add_argument('--lm_elbo_together', type=int)  # 0 or 1
     parser.add_argument('--lm_training_frequency', type=int)
     args = parser.parse_args()
@@ -351,10 +384,17 @@ if __name__ == "__main__":
     if args.lm_training_frequency is not None:
         fine_tuning_kwargs['lm_training_frequency'] = args.lm_training_frequency
 
+    model_params = json.load(open(args.model_parameters_location))
+
+    # Overwrite params if necessary
+    if args.z_dim:
+        model_params["encoder_parameters"]["z_dim"] = args.z_dim
+        model_params["decoder_parameters"]["z_dim"] = args.z_dim
+
     main(model_checkpoint=args.VAE_checkpoint_location,
          msa_location=msa_location,
          natural_labels_path=args.labels_path,
-         model_parameters_location=args.model_parameters_location,
+         model_params=model_params,
          training_logs_location=args.training_logs_location,
          plot_save_dir=args.training_logs_location,
          **fine_tuning_kwargs)

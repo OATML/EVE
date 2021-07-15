@@ -47,6 +47,7 @@ if __name__=='__main__':
     model_name = protein_name + "_" + args.model_name_suffix
     print("Model name: "+str(model_name))
 
+    assert os.path.isfile(args.model_parameters_location), args.model_parameters_location
     model_params = json.load(open(args.model_parameters_location))
 
     # Overwrite params if necessary
