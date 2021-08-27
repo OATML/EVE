@@ -17,8 +17,17 @@ The "examples" folder contains sample bash scripts to obtain EVE scores for the 
 The corresponding MSA and ClinVar labels are provided in the data folder.
 
 ## Data requirements
-The only data required to train EVE models and obtain EVE scores from scratch are the multiple sequence alignments (MSAs) for the corresponding proteins (see data/MSA for an example MSA for PTEN). The code provides basic functionalities to pre-process MSAs for modelling. By default, sequences with 50% or more gaps in the alignment and/or positions with less than 70% residue occupancy will be removed. These parameters may be adjusted as needed by the end user (see utils/data_utils.py for more details).
-The script "train_GMM_and_compute_EVE_scores.py" provides functionalities to compare EVE scores with reference labels (e.g., ClinVar) -- these labels are to be provided by the user (using a format similar to the example provided under data/labels).
+The only data required to train EVE models and obtain EVE scores from scratch are the multiple sequence alignments (MSAs) for the corresponding proteins. 
+
+### MSA creation
+We built multiple sequence alignments for each protein family by performing five search iterations of the profile HMM homology search tool Jackhmmer against the UniRef100 database of non-redundant protein sequences (downloaded on April 20th 2020). Please refer to the supplementary notes of the EVE paper (section 3.1.1) for a detailed description of the MSA creation process. 
+Our github repo provides the MSAs for 4 proteins: P53, PTEN, RASH & SCN5A (see data/MSA). MSAs for all proteins may be accessed on our website (https://evemodel.org/).
+
+### MSA pre-processing
+The EVE codebase provides basic functionalities to pre-process MSAs for modelling (see the MSA_processing class in utils/data_utils.py). By default, sequences with 50% or more gaps in the alignment and/or positions with less than 70% residue occupancy will be removed. These parameters may be adjusted as needed by the end user.
+
+### ClinVar labels
+The script "train_GMM_and_compute_EVE_scores.py" provides functionalities to compare EVE scores with reference labels (e.g., ClinVar). We provide an labels for 4 proteins: P53, PTEN, RASH & SCN5A (see data/labels). ClinVar labels for all proteins may be accessed on our website (https://evemodel.org/).
 
 ## Software requirements
 The entire codebase is written in python. Package requirements are as follows:

@@ -316,8 +316,9 @@ class VAE_model(nn.Module):
         for i,mutation in enumerate(list_valid_mutations):
             sequence = list_valid_mutated_sequences[mutation]
             for j,letter in enumerate(sequence):
-                k = msa_data.aa_dict[letter]
-                mutated_sequences_one_hot[i,j,k] = 1.0
+                if letter in msa_data.aa_dict:
+                    k = msa_data.aa_dict[letter]
+                    mutated_sequences_one_hot[i,j,k] = 1.0
 
         mutated_sequences_one_hot = torch.tensor(mutated_sequences_one_hot)
         dataloader = torch.utils.data.DataLoader(mutated_sequences_one_hot, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
