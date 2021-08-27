@@ -13,8 +13,8 @@ The end to end process to compute EVE scores consists of three consecutive steps
 We also provide all EVE scores for all single amino acid mutations for thousands of proteins at the following address: http://evemodel.org/.
 
 ## Example scripts
-The "examples" folder contains sample bash scripts to obtain EVE scores for the PTEN protein.
-The corresponding MSA and ClinVar labels are provided in the data folder.
+The "examples" folder contains sample bash scripts to obtain EVE scores for a protein of interest (using PTEN as an example).
+MSAs and ClinVar labels are provided for 4 proteins (P53, PTEN, RASH and SCN5A) in the data folder. 
 
 ## Data requirements
 The only data required to train EVE models and obtain EVE scores from scratch are the multiple sequence alignments (MSAs) for the corresponding proteins. 
