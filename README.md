@@ -1,3 +1,5 @@
+[![DOI](https://zenodo.org/badge/328127288.svg)](https://zenodo.org/badge/latestdoi/328127288)
+
 # Evolutionary model of Variant Effects (EVE)
 
 This is the official code repository for the paper "Large-scale clinical interpretation of genetic variants using evolutionary data and deep learning" (https://www.biorxiv.org/content/10.1101/2020.12.21.423785v1). This project is a joint collaboration between the Marks lab (https://www.deboramarkslab.com/) and the OATML group (https://oatml.cs.ox.ac.uk/).
