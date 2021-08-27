@@ -27,7 +27,7 @@ Our github repo provides the MSAs for 4 proteins: P53, PTEN, RASH & SCN5A (see d
 The EVE codebase provides basic functionalities to pre-process MSAs for modelling (see the MSA_processing class in utils/data_utils.py). By default, sequences with 50% or more gaps in the alignment and/or positions with less than 70% residue occupancy will be removed. These parameters may be adjusted as needed by the end user.
 
 ### ClinVar labels
-The script "train_GMM_and_compute_EVE_scores.py" provides functionalities to compare EVE scores with reference labels (e.g., ClinVar). We provide an labels for 4 proteins: P53, PTEN, RASH & SCN5A (see data/labels). ClinVar labels for all proteins may be accessed on our website (https://evemodel.org/).
+The script "train_GMM_and_compute_EVE_scores.py" provides functionalities to compare EVE scores with reference labels (e.g., ClinVar). Our github repo provides labels for 4 proteins: P53, PTEN, RASH & SCN5A (see data/labels). ClinVar labels for all proteins may be accessed on our website (https://evemodel.org/).
 
 ## Software requirements
 The entire codebase is written in python. Package requirements are as follows:
