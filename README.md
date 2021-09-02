@@ -1,4 +1,4 @@
-[![DOI](https://zenodo.org/badge/328127288.svg)](https://zenodo.org/badge/latestdoi/328127288)
+
 
 # Evolutionary model of Variant Effects (EVE)
 
