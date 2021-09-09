@@ -10,7 +10,7 @@ import pandas as pd
 import torch
 import tqdm
 from sklearn.metrics import r2_score
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, GroupKFold
 
 from EVE.VAE_model import VAE_model
 from utils import data_utils
@@ -148,7 +148,7 @@ def main(model_checkpoint,
             return self.lm(z)
 
     ########################
-
+    # TODO use GroupKFold? To get equal splits of labeled data?
     kf = KFold(n_splits=5, random_state=42, shuffle=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -194,7 +194,7 @@ def main(model_checkpoint,
                 vae_aux.lm.weight.data = vae_aux.lm.weight.clone() / 10.
 
         # Optimize over all parameters (VAE + prediction model)
-        optimizer = torch.optim.Adam(vae_aux.parameters(), lr=training_parameters['learning_rate'],  # Increase learning rate; increase linear model loss weight
+        optimizer = torch.optim.Adam(vae_aux.parameters(), lr=training_parameters['learning_rate'],
                                      weight_decay=training_parameters['l2_regularization'])
         if training_mode == "frozen":
             print("Frozen encoder/decoder: only optimizing over lm parameters")
@@ -289,7 +289,7 @@ def main(model_checkpoint,
                 print(training_step, "Training mse:", mse.item())
             elif loss_fn == "sigmoid":
                 lm_pred = torch.sigmoid(lm_pred[:num_labeled])
-                y_sig = batch_labeled_y / 2 + 1
+                y_sig = batch_labeled_y / 2 + 1  # y  = [-2, 0] -> [0,1]
                 bce = torch.nn.BCELoss()(lm_pred, y_sig)
                 loss = neg_ELBO + lm_loss_weight * bce + lm_l2_regularization * lm_l2_norm
                 training_metrics["bce_linear"].append(bce.item())
@@ -360,7 +360,7 @@ def main(model_checkpoint,
         def frozen_vae_loss():
             x, y = x_train_labeled, y_train_labeled
             with torch.no_grad():
-                mu, log_var = vae_aux.vae_model.encoder(x_train_labeled)
+                mu, log_var = vae_aux.vae_model.encoder(x)
                 z = vae_aux.vae_model.sample_latent(mu, log_var)
             if use_mean_embeddings:
                 lm_pred = vae_aux.lm(mu)
@@ -368,14 +368,14 @@ def main(model_checkpoint,
                 lm_pred = vae_aux.lm(z)
             if loss_fn == "mse":
                 mse = torch.nn.MSELoss()(lm_pred, y)  # Can also do sigmoid loss for soft classification from -2 to 0?
-                loss = 10 * mse
+                loss = lm_loss_weight * mse
                 training_metrics["mse"].append(mse.item())
                 print(training_step, "Training mse:", mse.item())
             elif loss_fn == "sigmoid":
                 lm_pred = torch.sigmoid(lm_pred)
-                y_sig = y / 2 + 1
+                y_sig = y / 2 + 1  # y = [-2,0] -> [0,1]
                 bce = torch.nn.BCELoss()(lm_pred, y_sig)
-                loss = 10 * bce
+                loss = lm_loss_weight * bce
                 training_metrics["bce_linear"].append(bce.item())
                 print(training_step, "Training bce:", bce.item())
             else:

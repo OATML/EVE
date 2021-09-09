@@ -28,15 +28,15 @@ class VAE_model(nn.Module):
             alphabet_size=None,
             Neff=None,
             ):
-        
+
         super().__init__()
-        
+
         self.model_name = model_name
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.dtype = torch.float32
         self.random_seed = random_seed
         torch.manual_seed(random_seed)
-        
+
         self.seq_len = seq_len if seq_len is not None else data.seq_len
         self.alphabet_size = alphabet_size if alphabet_size is not None else data.alphabet_size
         self.Neff = Neff if Neff is not None else data.Neff
@@ -45,14 +45,14 @@ class VAE_model(nn.Module):
         encoder_parameters['alphabet_size'] = self.alphabet_size
         decoder_parameters['seq_len'] = self.seq_len
         decoder_parameters['alphabet_size'] = self.alphabet_size
-        
+
         self.encoder = VAE_encoder.VAE_MLP_encoder(params=encoder_parameters)
         if decoder_parameters['bayesian_decoder']:
             self.decoder = VAE_decoder.VAE_Bayesian_MLP_decoder(params=decoder_parameters)
         else:
             self.decoder = VAE_decoder.VAE_Standard_MLP_decoder(params=decoder_parameters)
         self.logit_sparsity_p = decoder_parameters['logit_sparsity_p']
-        
+
     def sample_latent(self, mu, log_var):
         """
         Samples a latent vector via reparametrization trick
@@ -83,8 +83,8 @@ class VAE_model(nn.Module):
         KL divergence between the variational distributions and the priors (for the decoder weights).
         """
         KLD_decoder_params = 0.0
-        zero_tensor = torch.tensor(0.0).to(self.device) 
-        
+        zero_tensor = torch.tensor(0.0).to(self.device)
+
         for layer_index in range(len(self.decoder.hidden_layers_sizes)):
             for param_type in ['weight','bias']:
                 KLD_decoder_params += self.KLD_diag_gaussians(
@@ -93,7 +93,7 @@ class VAE_model(nn.Module):
                                     zero_tensor,
                                     zero_tensor
                 )
-                
+
         for param_type in ['weight','bias']:
                 KLD_decoder_params += self.KLD_diag_gaussians(
                                         self.decoder.state_dict(keep_vars=True)['last_hidden_layer_'+param_type+'_mean'].flatten(),
@@ -106,7 +106,7 @@ class VAE_model(nn.Module):
             self.logit_scale_sigma = 4.0
             self.logit_scale_mu = 2.0**0.5 * self.logit_scale_sigma * erfinv(2.0 * self.logit_sparsity_p - 1.0)
 
-            sparsity_mu = torch.tensor(self.logit_scale_mu).to(self.device) 
+            sparsity_mu = torch.tensor(self.logit_scale_mu).to(self.device)
             sparsity_log_var = torch.log(torch.tensor(self.logit_scale_sigma**2)).to(self.device)
             KLD_decoder_params += self.KLD_diag_gaussians(
                                     self.decoder.state_dict(keep_vars=True)['sparsity_weight_mean'].flatten(),
@@ -114,7 +114,7 @@ class VAE_model(nn.Module):
                                     sparsity_mu,
                                     sparsity_log_var
             )
-            
+
         if self.decoder.convolve_output:
             for param_type in ['weight']:
                 KLD_decoder_params += self.KLD_diag_gaussians(
@@ -130,7 +130,7 @@ class VAE_model(nn.Module):
                                     self.decoder.state_dict(keep_vars=True)['temperature_scaler_log_var'].flatten(),
                                     zero_tensor,
                                     zero_tensor
-            )        
+            )
         return KLD_decoder_params
 
     def loss_function(self, x_recon_log, x, mu, log_var, kl_latent_scale, kl_global_params_scale, annealing_warm_up, training_step, Neff):
@@ -159,7 +159,7 @@ class VAE_model(nn.Module):
         warm_up_scale = self.annealing_factor(annealing_warm_up, training_step)
         neg_ELBO = BCE + warm_up_scale * (beta * kl_latent_scale * KLD_latent + kl_global_params_scale * KLD_decoder_params_normalized)
         return neg_ELBO, BCE, KLD_latent, KLD_decoder_params_normalized
-    
+
     def all_likelihood_components(self, x):
         """
         Returns tensors of ELBO, reconstruction loss and KL divergence for each point in batch x.
@@ -170,10 +170,10 @@ class VAE_model(nn.Module):
 
         recon_x_log = recon_x_log.view(-1,self.alphabet_size*self.seq_len)
         x = x.view(-1,self.alphabet_size*self.seq_len)
-        
+
         BCE_batch_tensor = torch.sum(F.binary_cross_entropy_with_logits(recon_x_log, x, reduction='none'),dim=1)
         KLD_batch_tensor = (-0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp(),dim=1))
-        
+
         ELBO_batch_tensor = -(BCE_batch_tensor + KLD_batch_tensor)
 
         return ELBO_batch_tensor, BCE_batch_tensor, KLD_batch_tensor
@@ -189,7 +189,7 @@ class VAE_model(nn.Module):
         if torch.cuda.is_available():
             cudnn.benchmark = True
         self.train()
-        
+
         if training_parameters['log_training_info']:
             filename = training_parameters['training_logs_location']+os.sep+self.model_name+"_losses.csv"
             os.makedirs(os.path.dirname(filename), exist_ok=True)
@@ -199,7 +199,7 @@ class VAE_model(nn.Module):
                 logs.write("Alignment sequence length:\t"+str(data.seq_len)+"\n")
 
         optimizer = optim.Adam(self.parameters(), lr=training_parameters['learning_rate'], weight_decay=training_parameters['l2_regularization'])
-        
+
         if training_parameters['use_lr_scheduler']:
             scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=training_parameters['lr_scheduler_step_size'], gamma=training_parameters['lr_scheduler_gamma'])
 
@@ -218,10 +218,10 @@ class VAE_model(nn.Module):
 
         self.Neff_training = np.sum(weights_train)
         N_training = x_train.shape[0]
-        
+
         start = time.time()
         train_loss = 0
-        
+
         for training_step in tqdm.tqdm(range(1,training_parameters['num_training_steps']+1), desc="Training model"):
             # Sample a batch according to sequence weight
             batch_index = np.random.choice(batch_order, training_parameters['batch_size'], p=seq_sample_probs).tolist()
@@ -235,13 +235,13 @@ class VAE_model(nn.Module):
             beta = training_parameters.get('beta', 1)  # Normal VAE loss is beta = 1
 
             neg_ELBO, BCE, KLD_latent, KLD_decoder_params_normalized = self.beta_vae_loss(recon_x_log, x, mu, log_var, training_parameters['kl_latent_scale'], training_parameters['kl_global_params_scale'], training_parameters['annealing_warm_up'], training_step, self.Neff_training, beta=beta)
-            
+
             neg_ELBO.backward()
             optimizer.step()
-            
+
             if training_parameters['use_lr_scheduler']:
                 scheduler.step()
-            
+
             if training_step % training_parameters['log_training_freq'] == 0:
                 progress = "|Train : Update {0}. Negative ELBO : {1:.3f}, BCE: {2:.3f}, KLD_latent: {3:.3f}, KLD_decoder_params_norm: {4:.3f}, Time: {5:.2f} |".format(training_step, neg_ELBO, BCE, KLD_latent, KLD_decoder_params_normalized, time.time() - start)
                 print(progress)
@@ -255,7 +255,7 @@ class VAE_model(nn.Module):
                             encoder_parameters=encoder_parameters,
                             decoder_parameters=decoder_parameters,
                             training_parameters=training_parameters)
-            
+
             if training_parameters['use_validation_set'] and training_step % training_parameters['validation_freq'] == 0:
                 x_val = torch.tensor(x_val, dtype=self.dtype).to(self.device)
                 val_neg_ELBO, val_BCE, val_KLD_latent, val_KLD_global_parameters = self.test_model(x_val, weights_val, training_parameters['batch_size'])
@@ -274,10 +274,10 @@ class VAE_model(nn.Module):
                                 decoder_parameters=decoder_parameters,
                                 training_parameters=training_parameters)
                 self.train()
-    
+
     def test_model(self, x_val, weights_val, batch_size):
         self.eval()
-        
+
         with torch.no_grad():
             val_batch_order = np.arange(x_val.shape[0])
             val_seq_sample_probs = weights_val / np.sum(weights_val)
@@ -287,9 +287,9 @@ class VAE_model(nn.Module):
             mu, log_var = self.encoder(x)
             z = self.sample_latent(mu, log_var)
             recon_x_log = self.decoder(z)
-            
+
             neg_ELBO, BCE, KLD_latent, KLD_global_parameters = self.loss_function(recon_x_log, x, mu, log_var, kl_latent_scale=1.0, kl_global_params_scale=1.0, annealing_warm_up=0, training_step=1, Neff = self.Neff_training) #set annealing factor to 1
-            
+
         return neg_ELBO.item(), BCE.item(), KLD_latent.item(), KLD_global_parameters.item()
 
     def save(self, model_checkpoint, encoder_parameters, decoder_parameters, training_parameters, batch_size=256):
@@ -301,14 +301,14 @@ class VAE_model(nn.Module):
             'decoder_parameters':decoder_parameters,
             'training_parameters':training_parameters,
             }, model_checkpoint)
-    
+
     def compute_evol_indices(self, msa_data, list_mutations_location, num_samples, batch_size=256):
         """
         The column in the list_mutations dataframe that contains the mutant(s) for a given variant should be called "mutations"
         """
         #Multiple mutations are to be passed colon-separated
         list_mutations=pd.read_csv(list_mutations_location, header=0)
-        
+
         #Remove (multiple) mutations that are invalid
         list_valid_mutations = ['wt']
         list_valid_mutated_sequences = {}
@@ -326,11 +326,11 @@ class VAE_model(nn.Module):
                 else:
                     wt_aa,pos,idx_focus = msa_data.mutant_to_letter_pos_idx_focus_list[mut]
                     mutated_sequence[idx_focus] = mut_aa #perform the corresponding AA substitution
-            
+
             if fully_valid_mutation:
                 list_valid_mutations.append(mutation)
                 list_valid_mutated_sequences[mutation] = ''.join(mutated_sequence)
-        
+
         #One-hot encoding of mutated sequences
         mutated_sequences_one_hot = np.zeros((len(list_valid_mutations),len(msa_data.focus_cols),len(msa_data.alphabet)))
         for i,mutation in enumerate(list_valid_mutations):
@@ -356,3 +356,22 @@ class VAE_model(nn.Module):
             evol_indices =  - delta_elbos.detach().cpu().numpy()
 
         return list_valid_mutations, evol_indices, mean_predictions[0].detach().cpu().numpy(), std_predictions.detach().cpu().numpy()
+
+    def _one_hot_to_evol_indices(self, one_hot_tensor, num_samples, batch_size=256):
+        """Copied from compute_evol_indices above."""
+        dataloader = torch.utils.data.DataLoader(one_hot_tensor, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
+        prediction_matrix = torch.zeros((one_hot_tensor.size()[0], num_samples))
+
+        with torch.no_grad():
+            for i, batch in enumerate(tqdm.tqdm(dataloader, 'Looping through mutation batches')):
+                x = batch.type(self.dtype).to(self.device)
+                for j in tqdm.tqdm(range(num_samples), 'Looping through number of samples for batch #: '+str(i+1)):
+                    seq_predictions, _, _ = self.all_likelihood_components(x)
+                    prediction_matrix[i*batch_size:i*batch_size+len(x),j] = seq_predictions
+                tqdm.tqdm.write('\n')
+            mean_predictions = prediction_matrix.mean(dim=1, keepdim=False)
+            std_predictions = prediction_matrix.std(dim=1, keepdim=False)
+            delta_elbos = mean_predictions - mean_predictions[0]
+            evol_indices =  - delta_elbos.detach().cpu().numpy()
+
+        return evol_indices, mean_predictions[0].detach().cpu().numpy(), std_predictions.detach().cpu().numpy()
