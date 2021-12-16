@@ -59,9 +59,12 @@ This project is available under the MIT license.
 
 ## Reference
 If you use this code, please cite the following paper:
+```bibtex
+@article{Frazer2021DiseaseVP,
+  title={Disease variant prediction with deep generative models of evolutionary data.},
+  author={Jonathan Frazer and Pascal Notin and Mafalda Dias and Aidan Gomez and Joseph K Min and Kelly P. Brock and Yarin Gal and Debora S. Marks},
+  journal={Nature},
+  year={2021}
+}
 ```
-Large-scale clinical interpretation of genetic variants using evolutionary data and deep learning
-Jonathan Frazer, Pascal Notin, Mafalda Dias, Aidan Gomez, Kelly Brock, Yarin Gal, Debora S. Marks
-bioRxiv 2020.12.21.423785
-doi: https://doi.org/10.1101/2020.12.21.423785
-```
+Link: https://www.nature.com/articles/s41586-021-04043-8
