@@ -256,7 +256,7 @@ class VAE_Standard_MLP_decoder(nn.Module):
             self.temperature_scaler = nn.Parameter(torch.ones(1))
 
     def forward(self, z):
-        batch_size = x.shape[0]
+        batch_size = z.shape[0]
         if self.dropout_proba > 0.0:
             x = self.dropout_layer(z)
         else:
