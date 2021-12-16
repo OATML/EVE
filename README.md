@@ -1,8 +1,6 @@
-[![DOI](https://zenodo.org/badge/328127288.svg)](https://zenodo.org/badge/latestdoi/328127288)
-
 # Evolutionary model of Variant Effects (EVE)
 
-This is the official code repository for the paper "Large-scale clinical interpretation of genetic variants using evolutionary data and deep learning" (https://www.biorxiv.org/content/10.1101/2020.12.21.423785v1). This project is a joint collaboration between the Marks lab (https://www.deboramarkslab.com/) and the OATML group (https://oatml.cs.ox.ac.uk/).
+Please note that we have migrated the official repo to the following address: https://github.com/OATML-Markslab/EVE.
 
 ## Overview
 EVE is a set of protein-specific models providing for any single amino acid mutation of interest a score reflecting the propensity of the resulting protein to be pathogenic. For each protein family, a Bayesian VAE learns a distribution over amino acid sequences from evolutionary data. It enables the computation of an evolutionary index for each mutant, which approximates the log-likelihood ratio of the mutant vs the wild type. A global-local mixture of Gaussian Mixture Models separates variants into benign and pathogenic clusters based on that index. The EVE scores reflect probabilistic assignments to the pathogenic cluster.
@@ -55,9 +53,11 @@ This project is available under the MIT license.
 
 ## Reference
 If you use this code, please cite the following paper:
-```
-Large-scale clinical interpretation of genetic variants using evolutionary data and deep learning
-Jonathan Frazer, Pascal Notin, Mafalda Dias, Aidan Gomez, Kelly Brock, Yarin Gal, Debora S. Marks
-bioRxiv 2020.12.21.423785
-doi: https://doi.org/10.1101/2020.12.21.423785
+```bibtex
+@article{Frazer2021DiseaseVP,
+  title={Disease variant prediction with deep generative models of evolutionary data.},
+  author={Jonathan Frazer and Pascal Notin and Mafalda Dias and Aidan Gomez and Joseph K Min and Kelly P. Brock and Yarin Gal and Debora S. Marks},
+  journal={Nature},
+  year={2021}
+}
 ```
