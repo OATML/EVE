@@ -254,8 +254,8 @@ class VAE_model(nn.Module):
                     best_val_loss = val_neg_ELBO
                     best_model_step_index = training_step
                     self.save(model_checkpoint=training_parameters['model_checkpoint_location']+os.sep+self.model_name+"_best",
-                                encoder_parameters=encoder_parameters,
-                                decoder_parameters=decoder_parameters,
+                                encoder_parameters=self.encoder_parameters,
+                                decoder_parameters=self.decoder_parameters,
                                 training_parameters=training_parameters)
                 self.train()
     
