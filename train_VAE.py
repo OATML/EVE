@@ -17,6 +17,7 @@ if __name__=='__main__':
     parser.add_argument('--model_name_suffix', default='Jan1', type=str, help='model checkpoint name will be the protein name followed by this suffix')
     parser.add_argument('--model_parameters_location', type=str, help='Location of VAE model parameters')
     parser.add_argument('--training_logs_location', type=str, help='Location of VAE model parameters')
+    parser.add_argument('--seed', type=int, default=42, help='Random seed')
     args = parser.parse_args()
 
     mapping_file = pd.read_csv(args.MSA_list)
@@ -51,7 +52,7 @@ if __name__=='__main__':
                     data=data,
                     encoder_parameters=model_params["encoder_parameters"],
                     decoder_parameters=model_params["decoder_parameters"],
-                    random_seed=42
+                    random_seed=args.seed
     )
     model = model.to(model.device)
 
