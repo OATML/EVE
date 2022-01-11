@@ -2,7 +2,7 @@
 
 # Evolutionary model of Variant Effects (EVE)
 
-This is the official code repository for the paper "Large-scale clinical interpretation of genetic variants using evolutionary data and deep learning" (https://www.biorxiv.org/content/10.1101/2020.12.21.423785v1). This project is a joint collaboration between the Marks lab (https://www.deboramarkslab.com/) and the OATML group (https://oatml.cs.ox.ac.uk/).
+Please note that we have migrated the official repo to the following address: https://github.com/OATML-Markslab/EVE.
 
 ## Overview
 EVE is a set of protein-specific models providing for any single amino acid mutation of interest a score reflecting the propensity of the resulting protein to be pathogenic. For each protein family, a Bayesian VAE learns a distribution over amino acid sequences from evolutionary data. It enables the computation of an evolutionary index for each mutant, which approximates the log-likelihood ratio of the mutant vs the wild type. A global-local mixture of Gaussian Mixture Models separates variants into benign and pathogenic clusters based on that index. The EVE scores reflect probabilistic assignments to the pathogenic cluster.
@@ -67,4 +67,7 @@ If you use this code, please cite the following paper:
   year={2021}
 }
 ```
+<<<<<<< HEAD
 Link: https://www.nature.com/articles/s41586-021-04043-8
+=======
+>>>>>>> bug_fix_intermediate_saving
