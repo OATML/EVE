@@ -169,17 +169,21 @@ class MSA_processing:
                 print("Loaded sequence weights from disk")
             except:
                 print("Computing sequence weights")
-                # list_seq = self.one_hot_encoding.numpy()
-                # self.weights = compute_sequence_weights(list_seq, self.theta)
+                list_seq = self.one_hot_encoding.numpy()
+                eve = compute_sequence_weights(list_seq, self.theta)
                 alphabet_mapper = map_from_alphabet(ALPHABET_PROTEIN_GAP, default=GAP)
-                # sequences_mapped = list(map(alphabet_mapper.__getitem__, self.seq_name_to_sequence.values()))
                 arrays = []
                 for seq in self.seq_name_to_sequence.values():
                     arrays.append(np.array(list(seq)))
                 sequences = np.vstack(arrays)
                 sequences_mapped = map_matrix(sequences, alphabet_mapper)
                 # del sequences
-                self.weights = calc_weights_evcouplings(sequences_mapped, identity_threshold=1-self.theta, empty_value=0)  # GAP = 0
+                ev = calc_weights_evcouplings(sequences_mapped, identity_threshold=1-self.theta, empty_value=0)  # GAP = 0
+                # tmp check diffs
+                for old, new, seq in zip(eve[eve!=ev], ev[eve!=ev], self.seq_name_to_sequence.values()):
+                    print(f"Sequence {seq}: EVE {old} -> ev {new}")
+
+                self.weights = ev
                 # del sequences_mapped
                 print("Saving sequence weights to disk")
                 np.save(file=self.weights_location, arr=self.weights)
