@@ -8,20 +8,21 @@ from utils import data_utils
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='VAE')
-    parser.add_argument('--MSA_data_folder', type=str, help='Folder where MSAs are stored')
-    parser.add_argument('--MSA_list', type=str, help='List of proteins and corresponding MSA file name')
-    parser.add_argument('--protein_index', type=int, help='Row index of protein in input mapping file')
-    parser.add_argument('--MSA_weights_location', type=str, help='Location where weights for each sequence in the MSA will be stored')
+    parser.add_argument('--MSA_data_folder', type=str, help='Folder where MSAs are stored', required=True)
+    parser.add_argument('--MSA_list', type=str, help='List of proteins and corresponding MSA file name', required=True)
+    parser.add_argument('--protein_index', type=int, help='Row index of protein in input mapping file', required=True)
+    parser.add_argument('--MSA_weights_location', type=str, help='Location where weights for each sequence in the MSA will be stored', required=True)
     parser.add_argument('--theta_reweighting', type=float, help='Parameters for MSA sequence re-weighting')
-    parser.add_argument('--VAE_checkpoint_location', type=str, help='Location where VAE model checkpoints will be stored')
+    parser.add_argument('--VAE_checkpoint_location', type=str, help='Location where VAE model checkpoints will be stored', required=True)
     parser.add_argument('--model_name_suffix', default='Jan1', type=str, help='model checkpoint name will be the protein name followed by this suffix')
     parser.add_argument('--model_parameters_location', type=str, help='Location of VAE model parameters')
     parser.add_argument('--training_logs_location', type=str, help='Location of VAE model parameters')
     parser.add_argument('--z_dim', type=int, help='Specify a different latent dim than in the params file')
     args = parser.parse_args()
 
-    print("tmp: args=", args)
+    print("Arguments:", args)
 
+    assert os.path.isfile(args.MSA_list), f"MSA file list {args.MSA_list} doesn't seem to exist"
     mapping_file = pd.read_csv(args.MSA_list)
     protein_name = mapping_file['protein_name'][args.protein_index]
     msa_location = args.MSA_data_folder + os.sep + mapping_file['msa_location'][args.protein_index]
@@ -34,6 +35,7 @@ if __name__=='__main__':
         try:
             theta = float(mapping_file['theta'][args.protein_index])
         except:
+            print("Couldn't load theta from mapping file. Using default value of 0.2")
             theta = 0.2
     print("Theta MSA re-weighting: "+str(theta))
 

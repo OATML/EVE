@@ -1,8 +1,18 @@
 from collections import defaultdict
 
+import numba
 import numpy as np
 import pandas as pd
 import torch
+
+# constants
+GAP = "-"
+MATCH_GAP = GAP
+INSERT_GAP = "."
+
+ALPHABET_PROTEIN_NOGAP = "ACDEFGHIKLMNPQRSTVWY"
+ALPHABET_PROTEIN_GAP = GAP + ALPHABET_PROTEIN_NOGAP
+
 
 class MSA_processing:
     def __init__(self,
@@ -40,7 +50,7 @@ class MSA_processing:
         self.MSA_location = MSA_location
         self.weights_location = weights_location
         self.theta = theta
-        self.alphabet = "ACDEFGHIKLMNPQRSTVWY"
+        self.alphabet = ALPHABET_PROTEIN_NOGAP
         self.use_weights = use_weights
         self.preprocess_MSA = preprocess_MSA
         self.threshold_sequence_frac_gaps = threshold_sequence_frac_gaps
@@ -148,35 +158,30 @@ class MSA_processing:
         # Encode the sequences
         print("One-hot encoding sequences")
         self.one_hot_encoding = one_hot_3D(
-            seq_keys=self.seq_name_to_sequence.keys(),
+            seq_keys=self.seq_name_to_sequence.keys(),  # Note: Dicts are unordered for python < 3.6
             seq_name_to_sequence=self.seq_name_to_sequence,
             msa_data=self,  # Simply pass ourselves as the msa_data object
         )
-        # self.one_hot_encoding = np.zeros((len(self.seq_name_to_sequence.keys()),len(self.focus_cols),len(self.alphabet)))
-        # for i,seq_name in enumerate(self.seq_name_to_sequence.keys()):
-        #     sequence = self.seq_name_to_sequence[seq_name]
-        #     for j,letter in enumerate(sequence):
-        #         if letter in self.aa_dict:
-        #             k = self.aa_dict[letter]
-        #             self.one_hot_encoding[i,j,k] = 1.0
 
         if self.use_weights:
             try:
                 self.weights = np.load(file=self.weights_location)
                 print("Loaded sequence weights from disk")
             except:
-                print ("Computing sequence weights")
-                list_seq = self.one_hot_encoding
-                list_seq = list_seq.reshape((list_seq.shape[0], list_seq.shape[1] * list_seq.shape[2]))
-                def compute_weight(seq):
-                    number_non_empty_positions = np.dot(seq,seq)
-                    if number_non_empty_positions>0:
-                        denom = np.dot(list_seq,seq) / np.dot(seq,seq)
-                        denom = np.sum(denom > 1 - self.theta)
-                        return 1/denom
-                    else:
-                        return 0.0 #return 0 weight if sequence is fully empty
-                self.weights = np.array(list(map(compute_weight,list_seq)))
+                print("Computing sequence weights")
+                # list_seq = self.one_hot_encoding.numpy()
+                # self.weights = compute_sequence_weights(list_seq, self.theta)
+                alphabet_mapper = map_from_alphabet(ALPHABET_PROTEIN_GAP, default=GAP)
+                # sequences_mapped = list(map(alphabet_mapper.__getitem__, self.seq_name_to_sequence.values()))
+                arrays = []
+                for seq in self.seq_name_to_sequence.values():
+                    arrays.append(np.array(list(seq)))
+                sequences = np.vstack(arrays)
+                sequences_mapped = map_matrix(sequences, alphabet_mapper)
+                # del sequences
+                self.weights = calc_weights_evcouplings(sequences_mapped, identity_threshold=1-self.theta, empty_value=0)  # GAP = 0
+                # del sequences_mapped
+                print("Saving sequence weights to disk")
                 np.save(file=self.weights_location, arr=self.weights)
         else:
             # If not using weights, use an isotropic weight matrix
@@ -285,3 +290,152 @@ def gen_one_hot_to_sequence(one_hot_tensor, alphabet):
 
 def one_hot_to_sequence_list(one_hot_tensor, alphabet):
     return list(gen_one_hot_to_sequence(one_hot_tensor, alphabet))
+
+
+# Could compare to evcouplings's num_cluster implementation https://github.com/debbiemarkslab/EVcouplings/blob/develop/evcouplings/align/alignment.py#L1172
+#  And take best of both worlds
+def compute_sequence_weights(list_seq, theta):
+    _N, _seq_len, _alphabet_size = list_seq.shape  # = len(self.seq_name_to_sequence.keys()), len(self.focus_cols), len(self.alphabet)
+    list_seq = list_seq.reshape((_N, _seq_len * _alphabet_size))
+
+    # Could maybe use numba.jit for this? And/or could translate to torch and use GPU if it fits in memory?
+    def compute_weight(seq):
+        # seq shape: (L * alphabet_size,)
+        number_non_empty_positions = np.sum(seq)  # = np.dot(seq,seq), assuming it is a flattened one-hot matrix
+        if number_non_empty_positions>0:
+            denom = np.dot(list_seq,seq) / number_non_empty_positions # number_non_empty_positions = np.dot(seq,seq)
+            denom = np.sum(denom > 1 - theta)
+            return 1/denom
+        else:
+            return 0.0 #return 0 weight if sequence is fully empty
+
+    weights = np.array(list(map(compute_weight, list_seq)))
+    return weights
+
+
+def is_empty_sequence_one_hot(one_hot_matrix):
+    # Could also just use the literal value -1 or NaN, or GAP as in EVCouplings to denote empty in the original array?
+    return one_hot_matrix.reshape(one_hot_matrix.shape[0], -1).sum()
+
+
+def is_empty_sequence_matrix(matrix, empty_value):
+    assert len(matrix.shape) == 2, f"Matrix must be 2D; shape={matrix.shape}"
+    assert isinstance(empty_value, (int, float)), f"empty_value must be a number; type={type(empty_value)}"
+    empty_idx = np.all((matrix == empty_value), axis=1)  # Check for each sequence if all positions are equal to empty_value
+    return empty_idx
+
+
+# Below are util functions copied from EVCouplings: https://github.com/debbiemarkslab/EVcouplings
+# This code looks slow but it's because it's written as a numba kernel
+@numba.jit(nopython=True)
+def calc_num_cluster_members(matrix, identity_threshold, invalid_value):
+    """
+    From EVCouplings: https://github.com/debbiemarkslab/EVcouplings
+    Calculate number of sequences in alignment
+    within given identity_threshold of each other
+    Parameters
+    ----------
+    matrix : np.array
+        N x L matrix containing N sequences of length L.
+        Matrix must be mapped to range(0, num_symbols) using
+        map_matrix function
+    identity_threshold : float
+        Sequences with at least this pairwise identity will be
+        grouped in the same cluster.
+    Returns
+    -------
+    np.array
+        Vector of length N containing number of cluster
+        members for each sequence (inverse of sequence
+        weight)
+    """
+    N, L = matrix.shape
+    L = 1.0 * L
+
+    # Empty sequences are filtered out before this function and are ignored
+    # minimal cluster size is 1 (self)
+    num_neighbors = np.ones((N))
+
+    # compare all pairs of sequences
+    for i in range(N - 1):
+        for j in range(i + 1, N):
+            pair_id = 0
+            for k in range(L):
+                if matrix[i, k] == matrix[j, k] and matrix[i, k] != invalid_value:  # Edit(Lood): Don't count gaps as similar
+                    pair_id += 1
+
+            if pair_id / L >= identity_threshold:
+                num_neighbors[i] += 1
+                num_neighbors[j] += 1
+
+    return num_neighbors
+
+
+def calc_weights_evcouplings(matrix_mapped, identity_threshold, empty_value):
+        """
+        From EVCouplings: https://github.com/debbiemarkslab/EVcouplings
+        Calculate weights for sequences in alignment by
+        clustering all sequences with sequence identity
+        greater or equal to the given threshold.
+        Parameters
+        ----------
+        identity_threshold : float
+            Sequence identity threshold
+        """
+        empty_idx = is_empty_sequence_matrix(matrix_mapped, empty_value=empty_value)  # e.g. sequences with just gaps or lowercase, no valid AAs
+        num_cluster_members = calc_num_cluster_members(
+            matrix_mapped[~empty_idx], identity_threshold, invalid_value=empty_value  # matrix_mapped[~empty_idx]
+        )
+        # Empty sequences: weight 0
+        N = matrix_mapped.shape[0]
+        weights = np.zeros((N))
+        weights[~empty_idx] = 1.0 / num_cluster_members
+        return weights
+
+
+def map_from_alphabet(alphabet, default=GAP):
+    """
+    Creates a mapping dictionary from a given alphabet.
+    Parameters
+    ----------
+    alphabet : str
+        Alphabet for remapping. Elements will
+        be remapped according to alphabet starting
+        from 0
+    default : Elements in matrix that are not
+        contained in alphabet will be treated as
+        this character
+    Raises
+    ------
+    ValueError
+        For invalid default character
+    """
+    map_ = {
+        c: i for i, c in enumerate(alphabet)
+    }
+
+    try:
+        default = map_[default]
+    except KeyError:
+        raise ValueError(
+            "Default {} is not in alphabet {}".format(default, alphabet)
+        )
+
+    return defaultdict(lambda: default, map_)
+
+
+def map_matrix(matrix, map_):
+    """
+    Map elements in a numpy array using alphabet
+    Parameters
+    ----------
+    matrix : np.array
+        Matrix that should be remapped
+    map_ : defaultdict
+        Map that will be applied to matrix elements
+    Returns
+    -------
+    np.array
+        Remapped matrix
+    """
+    return np.vectorize(map_.__getitem__)(matrix)
