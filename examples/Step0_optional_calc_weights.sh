@@ -2,14 +2,14 @@
 #SBATCH -c 10                             # Request ten cores for parallel weights calc
 #SBATCH -N 1                              # Request one node (if you request more than one core with -c, also using
                                           # -N 1 means all cores will be on the same node)
-#SBATCH -t 0-5:59                         # Runtime in D-HH:MM format
+#SBATCH -t 0-0:59                         # Runtime in D-HH:MM format
 #SBATCH -p short                          # Partition to run in
 #SBATCH --mem=30G                          # Memory total in MB (for all cores)
 
 #SBATCH --mail-type=TIME_LIMIT_80,TIME_LIMIT,FAIL,ARRAY_TASKS
 #SBATCH --mail-user="lodevicus_vanniekerk@hms.harvard.edu"
 
-#SBATCH --job-name="tmp_eve_weights"
+#SBATCH --job-name="tmp_eve_weights_10cpu"
 # Job array-specific
 # Nice tip: using %3a to pad job array number to 3 digits (23 -> 023)
 #SBATCH --output=logs/slurm_files/slurm-lvn-%A_%3a-%x.out  # File to which STDOUT + STDERR will be written, %A: jobID, %a: array task ID, %x: jobname
@@ -36,6 +36,7 @@ export protein_index=$SLURM_ARRAY_TASK_ID
 srun python calc_weights.py \
     --MSA_data_folder ${MSA_data_folder} \
     --MSA_list ${MSA_list} \
-    --protein_index ${protein_index} \
-    --MSA_weights_location ${MSA_weights_location}
+    --protein_index "${protein_index}" \
+    --MSA_weights_location ${MSA_weights_location} \
+    --num_cpus "${SLURM_CPUS_PER_TASK}"
 #    --skip_existing

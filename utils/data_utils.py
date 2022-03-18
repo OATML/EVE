@@ -415,7 +415,7 @@ def init_worker(list_seq, theta):
 def compute_sequence_weights(list_seq, theta, num_cpus=1):
     _N, _seq_len, _alphabet_size = list_seq.shape  # = len(self.seq_name_to_sequence.keys()), len(self.focus_cols), len(self.alphabet)
     list_seq = list_seq.reshape((_N, _seq_len * _alphabet_size))
-    print(f"using {num_cpus} cpus")
+    print(f"Using {num_cpus} cpus for EVE weights computation")
 
     # # Could maybe use numba.jit for this? And/or could translate to torch and use GPU if it fits in memory?
     # def compute_weight(seq, debug=False):
@@ -437,7 +437,7 @@ def compute_sequence_weights(list_seq, theta, num_cpus=1):
         # Compute weights in parallel
         with multiprocessing.Pool(processes=num_cpus, initializer=init_worker, initargs=(list_seq, theta)) as pool:
             # func = functools.partial(compute_weight, list_seq=list_seq, theta=theta)
-            chunksize = min(8, int(_N / num_cpus / 4))
+            chunksize = max(min(8, int(_N / num_cpus / 4)), 1)
             print("chunksize: " + str(chunksize))
             # imap: Lazy version of map
             # Parallel progress bars are complicated, so just used a single one
@@ -640,8 +640,12 @@ def calc_weights_evcouplings(matrix_mapped, identity_threshold, empty_value, num
 
     # Original EVCouplings code structure, plus gap handling
     if num_cpus > 1:
-        print(
-            "Calculating weights using Numba parallel (experimental)")  # This works on the datasets I've tested on, but probably a good idea to report it anyway
+        # This works on the datasets I've tested on, but probably a good idea to report it anyway
+        print("Calculating weights using Numba parallel (experimental) since num_cpus > 1. "
+              "If you want to disable multiprocessing set num_cpus=1.")  
+        print("Default number of threads for Numba:", numba.config.NUMBA_NUM_THREADS)
+        numba.set_num_threads(num_cpus)
+        print("Set number of threads to:", numba.get_num_threads())
         num_cluster_members = calc_num_cluster_members_nogaps_parallel(matrix_mapped[~empty_idx], identity_threshold,
                                                                        invalid_value=empty_value)
     else:
