@@ -658,6 +658,8 @@ def calc_weights_evcouplings(matrix_mapped, identity_threshold, empty_value, num
         print("Calculating weights using Numba parallel (experimental) since num_cpus > 1. "
               "If you want to disable multiprocessing set num_cpus=1.")
         print("Default number of threads for Numba:", numba.config.NUMBA_NUM_THREADS)
+        # num_cpus > numba.config.NUMBA_NUM_THREADS will give an error.
+        # But we'll leave it so that the user has to be explicit.
         numba.set_num_threads(num_cpus)
         print("Set number of threads to:", numba.get_num_threads())
         num_cluster_members = calc_num_cluster_members_nogaps_parallel(matrix_mapped[~empty_idx], identity_threshold,

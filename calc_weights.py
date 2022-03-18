@@ -20,7 +20,7 @@ if __name__ == '__main__':
     parser.add_argument("--num_cpus", type=int, help="Number of CPUs to use", default=1)
     # Note: It would be nicer to have an overwrite flag, but I don't want to change the MSAProcessing code too much
     parser.add_argument("--skip_existing", help="Will quit gracefully if weights file already exists", action="store_true", default=False)
-    parser.add_argument("--calc_method", type=CalcMethod.__getitem__, choices=['EVCOUPLINGS_NUMBA', 'EVE_WEIGHTS', 'BOTH'], help="Method to use for calculating weights", default="EVCOUPLINGS_NUMBA")
+    parser.add_argument("--calc_method", choices=['EVCOUPLINGS_NUMBA', 'EVE_WEIGHTS', 'BOTH'], help="Method to use for calculating weights", default="EVCOUPLINGS_NUMBA")
     args = parser.parse_args()
 
     print("Arguments:", args)
@@ -61,14 +61,14 @@ if __name__ == '__main__':
                                   f"Please delete it if you want to re-calculate it. "
                                   f"If you want to skip existing files, use --skip_existing.")
 
-
+    calc_method = CalcMethod[args.calc_method]
     data = data_utils.MSA_processing(
         MSA_location=msa_location,
         theta=theta,
         use_weights=True,
         weights_location=weights_file,
         num_cpus=args.num_cpus,
-        calc_weights_method=args.calc_method
+        calc_weights_method=calc_method,
     )
     end = time.perf_counter()
     print(f"calc_weights.py took {end-start:.2f} seconds in total.")
