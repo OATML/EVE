@@ -28,7 +28,7 @@ export CONDA_BIN=/home/lov701/miniconda3/bin/
 echo "Assuming the conda environment protein_env is up to date"
 source "$CONDA_BIN"/activate protein_env
 
-export MSA_data_folder="/n/groups/marks/users/lood/DeepSequence_runs/weights_msa_tkmer_20220227/"
+export MSA_data_folder="/n/groups/marks/users/lood/DeepSequence_runs/msa_tkmer_20220227"
 export MSA_list='./data/mappings/mapping_msa_tkmer_20220227.csv'
 export MSA_weights_location='./data/weights_check/'
 export protein_index=$SLURM_ARRAY_TASK_ID
