@@ -6,6 +6,7 @@ import time
 import pandas as pd
 
 from utils import data_utils
+from utils.data_utils import CalcMethod
 
 if __name__ == '__main__':
     start = time.perf_counter()
@@ -19,6 +20,7 @@ if __name__ == '__main__':
     parser.add_argument("--num_cpus", type=int, help="Number of CPUs to use", default=1)
     # Note: It would be nicer to have an overwrite flag, but I don't want to change the MSAProcessing code too much
     parser.add_argument("--skip_existing", help="Will quit gracefully if weights file already exists", action="store_true", default=False)
+    parser.add_argument("--calc_method", type=CalcMethod, help="Method to use for calculating weights", default=CalcMethod.EVCOUPLINGS_NUMBA)
     args = parser.parse_args()
 
     print("Arguments:", args)
@@ -65,7 +67,7 @@ if __name__ == '__main__':
         use_weights=True,
         weights_location=weights_file,
         num_cpus=args.num_cpus,
+        calc_weights_method=CalcMethod.EVCOUPLINGS_NUMBA,
     )
     end = time.perf_counter()
     print(f"calc_weights.py took {end-start:.2f} seconds in total.")
-

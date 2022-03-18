@@ -1,3 +1,4 @@
+import enum
 import functools
 import os
 import time
@@ -20,6 +21,12 @@ ALPHABET_PROTEIN_NOGAP = "ACDEFGHIKLMNPQRSTVWY"
 ALPHABET_PROTEIN_GAP = GAP + ALPHABET_PROTEIN_NOGAP
 
 
+class CalcMethod(enum.Flag):
+    EVCOUPLINGS_NUMBA = enum.auto()
+    EVE_WEIGHTS = enum.auto()
+    BOTH = EVCOUPLINGS_NUMBA | EVE_WEIGHTS
+
+
 class MSA_processing:
     def __init__(self,
                  MSA_location="",
@@ -31,6 +38,7 @@ class MSA_processing:
                  threshold_focus_cols_frac_gaps=0.3,
                  remove_sequences_with_indeterminate_AA_in_focus_cols=True,
                  num_cpus=1,
+                 calc_weights_method=CalcMethod.EVCOUPLINGS_NUMBA,
                  ):
 
         """
@@ -79,6 +87,7 @@ class MSA_processing:
         self.all_single_mutations = None
 
         # Fill in the instance variables
+        self.calc_weights_method = calc_weights_method  # TODO temp
         self.gen_alignment(num_cpus=num_cpus)
         self.create_all_singles()
 
@@ -181,79 +190,84 @@ class MSA_processing:
         # TODO(Lood) refactor this out so that it can be used in isolation
         if self.use_weights:
             try:
+                print("Loading sequence weights from disk")
                 self.weights = np.load(file=self.weights_location)
-                print("Loaded sequence weights from disk")
             except:
                 print("Computing sequence weights")
                 # EVCouplings weights calc:
-                alphabet_mapper = map_from_alphabet(ALPHABET_PROTEIN_GAP, default=GAP)
-                arrays = []
-                for seq in self.seq_name_to_sequence.values():
-                    arrays.append(np.array(list(seq)))
-                sequences = np.vstack(arrays)
-                sequences_mapped = map_matrix(sequences, alphabet_mapper)
-                print("Compiling JIT function")
-                start = time.perf_counter()
-                # Compile jit function
-                _ = calc_weights_evcouplings(sequences_mapped[:10], identity_threshold=1 - self.theta,
-                                             empty_value=0, num_cpus=num_cpus)  # GAP = 0
-                print("JIT function compiled/run in {} seconds".format(time.perf_counter() - start))
-                # TODO temporary speed tests
-                # del sequences
-                print("Checking runtime for JIT function with different args")
-                start = time.perf_counter()
-                _ = calc_weights_evcouplings(sequences_mapped[:11], identity_threshold=1 - self.theta,
-                                             empty_value=0, num_cpus=num_cpus)  # GAP = 0
-                print("JIT function with length 11 run in {} seconds".format(time.perf_counter() - start))
+                # This flag thing is over the top and should be taken out
+                if self.calc_weights_method & CalcMethod.EVCOUPLINGS_NUMBA:
+                    alphabet_mapper = map_from_alphabet(ALPHABET_PROTEIN_GAP, default=GAP)
+                    arrays = []
+                    for seq in self.seq_name_to_sequence.values():
+                        arrays.append(np.array(list(seq)))
+                    sequences = np.vstack(arrays)
+                    sequences_mapped = map_matrix(sequences, alphabet_mapper)
+                    print("Compiling JIT function")
+                    start = time.perf_counter()
+                    # Compile jit function
+                    _ = calc_weights_evcouplings(sequences_mapped[:10], identity_threshold=1 - self.theta,
+                                                 empty_value=0, num_cpus=num_cpus)  # GAP = 0
+                    print("JIT function compiled/run in {} seconds".format(time.perf_counter() - start))
+                    # TODO temporary speed tests
+                    # del sequences
+                    print("Checking runtime for JIT function with different args")
+                    start = time.perf_counter()
+                    _ = calc_weights_evcouplings(sequences_mapped[:11], identity_threshold=1 - self.theta,
+                                                 empty_value=0, num_cpus=num_cpus)  # GAP = 0
+                    print("JIT function with length 11 run in {} seconds".format(time.perf_counter() - start))
 
-                print("100 seqs:")
-                start = time.perf_counter()
-                _ = calc_weights_evcouplings(sequences_mapped[:100], identity_threshold=1 - self.theta,
-                                             empty_value=0, num_cpus=num_cpus)  # GAP = 0
-                print("JIT function with length 100 run in {} seconds".format(time.perf_counter() - start))
-                ###########################################################
-                print("1000 seqs:")
-                start = time.perf_counter()
-                _ = calc_weights_evcouplings(sequences_mapped[:1000], identity_threshold=1 - self.theta,
-                                             empty_value=0, num_cpus=num_cpus)  # GAP = 0
-                print("JIT function with length 1000 run in {} seconds".format(time.perf_counter() - start))
-                #######################################################################################################
-                print("10k seqs:")
-                start = time.perf_counter()
-                _ = calc_weights_evcouplings(sequences_mapped[:10000], identity_threshold=1 - self.theta,
-                                             empty_value=0, num_cpus=num_cpus)  # GAP = 0
-                print("JIT function with length 10k run in {} seconds".format(time.perf_counter() - start))
-                ##################################
-                print("100k seqs:")
-                start = time.perf_counter()
-                _ = calc_weights_evcouplings(sequences_mapped[:100000], identity_threshold=1 - self.theta,
-                                             empty_value=0, num_cpus=num_cpus)  # GAP = 0
-                print("JIT function with length 100k run in {} seconds".format(time.perf_counter() - start))
+                    print("100 seqs:")
+                    start = time.perf_counter()
+                    _ = calc_weights_evcouplings(sequences_mapped[:100], identity_threshold=1 - self.theta,
+                                                 empty_value=0, num_cpus=num_cpus)  # GAP = 0
+                    print("JIT function with length 100 run in {} seconds".format(time.perf_counter() - start))
+                    ###########################################################
+                    print("1000 seqs:")
+                    start = time.perf_counter()
+                    _ = calc_weights_evcouplings(sequences_mapped[:1000], identity_threshold=1 - self.theta,
+                                                 empty_value=0, num_cpus=num_cpus)  # GAP = 0
+                    print("JIT function with length 1000 run in {} seconds".format(time.perf_counter() - start))
+                    #######################################################################################################
+                    print("10k seqs:")
+                    start = time.perf_counter()
+                    _ = calc_weights_evcouplings(sequences_mapped[:10000], identity_threshold=1 - self.theta,
+                                                 empty_value=0, num_cpus=num_cpus)  # GAP = 0
+                    print("JIT function with length 10k run in {} seconds".format(time.perf_counter() - start))
+                    ##################################
+                    print("100k seqs:")
+                    start = time.perf_counter()
+                    _ = calc_weights_evcouplings(sequences_mapped[:100000], identity_threshold=1 - self.theta,
+                                                 empty_value=0, num_cpus=num_cpus)  # GAP = 0
+                    print("JIT function with length 100k run in {} seconds".format(time.perf_counter() - start))
 
-                print("Starting EVCouplings calculation")
-                start = time.perf_counter()
-                ev = calc_weights_evcouplings(sequences_mapped, identity_threshold=1 - self.theta,
-                                              empty_value=0, num_cpus=num_cpus)  # GAP = 0
-                end = time.perf_counter()
-                print(f"EVCouplings weights took {end - start:.2f} seconds")
-                # EVE weights calc:
-                list_seq = self.one_hot_encoding.numpy()
-                start = time.perf_counter()
-                # TODO check memory usage for multiprocessing
-                eve = compute_sequence_weights(list_seq, self.theta, num_cpus=num_cpus)
-                end = time.perf_counter()
-                print(f"EVE weights took {end - start:.2f} seconds")
-                # tmp check diffs
-                for old, new, seq, idx in zip(eve[eve != ev], ev[eve != ev], sequences[eve != ev],
-                                              np.where(eve != ev)[0]):
-                    print(f"Sequence {idx} {''.join(seq)}: EVE {1 / old} -> ev {1 / new}")
+                    print("Starting EVCouplings calculation")
+                    start = time.perf_counter()
+                    ev = calc_weights_evcouplings(sequences_mapped, identity_threshold=1 - self.theta,
+                                                  empty_value=0, num_cpus=num_cpus)  # GAP = 0
+                    end = time.perf_counter()
+                    print(f"EVCouplings weights took {end - start:.2f} seconds")
+                if self.calc_weights_method & CalcMethod.EVE_WEIGHTS:
+                    # EVE weights calc:
+                    list_seq = self.one_hot_encoding.numpy()
+                    start = time.perf_counter()
+                    # TODO check memory usage for multiprocessing
+                    eve = compute_sequence_weights(list_seq, self.theta, num_cpus=num_cpus)
+                    end = time.perf_counter()
+                    print(f"EVE weights took {end - start:.2f} seconds")
+                if self.calc_weights_method == CalcMethod.BOTH:
+                    # tmp check diffs
+                    for old, new, seq, idx in zip(eve[eve != ev], ev[eve != ev], sequences[eve != ev],
+                                                  np.where(eve != ev)[0]):
+                        print(f"Sequence {idx} {''.join(seq)}: EVE {1 / old} -> ev {1 / new}")
 
-                self.weights = ev
-                # del sequences_mapped
+                    self.weights = ev
+                    # Also a temporary check
+                    assert np.array_equal(eve, ev), f"EVCouplings and EVE weights are not equal. EVcouplings weights: {ev}, EVE weights: {eve}"
+                    # del sequences_mapped
+                    print("EVCouple and EVE weights are equal")  # tmp
+
                 print("Saving sequence weights to disk")
-                # Also a temporary check
-                assert np.array_equal(eve, ev), f"EVCouplings and EVE weights are not equal. EVcouplings weights: {ev}, EVE weights: {eve}"
-                print("EVCouple and EVE weights are equal")  #tmp
                 np.save(file=self.weights_location, arr=self.weights)
 
         else:
@@ -442,11 +456,11 @@ def compute_sequence_weights(list_seq, theta, num_cpus=1):
             # imap: Lazy version of map
             # Parallel progress bars are complicated, so just used a single one
             weights_map = tqdm(pool.imap(compute_weight_global, range(_N), chunksize=chunksize),
-                               total=_N)
+                               total=_N, desc="Computing weights parallel EVE")
             weights = np.array(list(weights_map))
     else:
         weights_map = map(lambda seq: compute_weight(seq, list_seq=list_seq, theta=theta), list_seq)
-        weights = np.array(list(tqdm(weights_map, total=_N)))
+        weights = np.array(list(tqdm(weights_map, total=_N, desc="Computing weights serial EVE")))
 
     return weights
 
@@ -642,7 +656,7 @@ def calc_weights_evcouplings(matrix_mapped, identity_threshold, empty_value, num
     if num_cpus > 1:
         # This works on the datasets I've tested on, but probably a good idea to report it anyway
         print("Calculating weights using Numba parallel (experimental) since num_cpus > 1. "
-              "If you want to disable multiprocessing set num_cpus=1.")  
+              "If you want to disable multiprocessing set num_cpus=1.")
         print("Default number of threads for Numba:", numba.config.NUMBA_NUM_THREADS)
         numba.set_num_threads(num_cpus)
         print("Set number of threads to:", numba.get_num_threads())
