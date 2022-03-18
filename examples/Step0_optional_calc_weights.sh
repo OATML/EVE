@@ -38,3 +38,4 @@ srun python calc_weights.py \
     --MSA_list ${MSA_list} \
     --protein_index ${protein_index} \
     --MSA_weights_location ${MSA_weights_location}
+#    --skip_existing

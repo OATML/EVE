@@ -67,5 +67,5 @@ if __name__ == '__main__':
         num_cpus=args.num_cpus,
     )
     end = time.perf_counter()
-    print(f"Weights calc took {end-start:.2f} seconds")
+    print(f"calc_weights.py took {end-start:.2f} seconds in total.")
 
