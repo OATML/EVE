@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -c 1                             # Request ten cores for parallel weights calc
+#SBATCH -c 10                             # Request ten cores for parallel weights calc
 #SBATCH -N 1                              # Request one node (if you request more than one core with -c, also using
                                           # -N 1 means all cores will be on the same node)
 #SBATCH -t 0-0:59                         # Runtime in D-HH:MM format
@@ -9,7 +9,7 @@
 #SBATCH --mail-type=TIME_LIMIT_80,TIME_LIMIT,FAIL,ARRAY_TASKS
 #SBATCH --mail-user="lodevicus_vanniekerk@hms.harvard.edu"
 
-#SBATCH --job-name="tmp_eve_weights_1cpu"
+#SBATCH --job-name="tmp_eve_weights_10cpu"
 # Job array-specific
 # Nice tip: using %3a to pad job array number to 3 digits (23 -> 023)
 #SBATCH --output=logs/slurm_files/slurm-lvn-%A_%3a-%x.out  # File to which STDOUT + STDERR will be written, %A: jobID, %a: array task ID, %x: jobname
@@ -30,7 +30,7 @@ source "$CONDA_BIN"/activate protein_env
 
 export MSA_data_folder="/n/groups/marks/users/lood/DeepSequence_runs/msa_tkmer_20220227"
 export MSA_list='./data/mappings/mapping_msa_tkmer_20220227.csv'
-export MSA_weights_location='./data/weights_1cpu/'
+export MSA_weights_location='./data/weights_10cpu/'
 export protein_index=$SLURM_ARRAY_TASK_ID
 
 srun python calc_weights.py \
