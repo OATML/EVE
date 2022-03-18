@@ -12,7 +12,7 @@
 #SBATCH --job-name="tmp_eve_weights"
 # Job array-specific
 # Nice tip: using %3a to pad job array number to 3 digits (23 -> 023)
-##SBATCH --output=logs/slurm_files/slurm-lvn-%A_%3a-%x.out  # File to which STDOUT + STDERR will be written, %A: jobID, %a: array task ID, %x: jobname
+#SBATCH --output=logs/slurm_files/slurm-lvn-%A_%3a-%x.out  # File to which STDOUT + STDERR will be written, %A: jobID, %a: array task ID, %x: jobname
 #SBATCH --array=0-5%10  		  # Job arrays (e.g. 1-100 with a maximum of 5 jobs at once)
 #SBATCH --array=0			      # Resubmitting / testing only first job
 
@@ -22,7 +22,7 @@ echo "hostname: $(hostname)"
 echo "Running from: $(pwd)"
 module load gcc/6.2.0
 
-export CONDA_BIN=/home/lov701/miniconda3/bin/conda
+export CONDA_BIN=/home/lov701/miniconda3/bin/
 
 # Assumes that the conda environment is up to date
 echo "Assuming the conda environment protein_env is up to date"
