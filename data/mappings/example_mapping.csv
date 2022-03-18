@@ -1,2 +1,4 @@
 protein_name,msa_location,theta
 PTEN_HUMAN,PTEN_HUMAN_b1.0.a2m,0.2
+POLG_HCVJF,POLG_HCVJF_theta0.99_full_11-26-2021_b01.a2m,0.01
+BLAT_ECOLX,BLAT_ECOLX_full_11-26-2021_b02.a2m,0.2

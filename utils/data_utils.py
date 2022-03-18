@@ -29,7 +29,8 @@ class MSA_processing:
                  preprocess_MSA=True,
                  threshold_sequence_frac_gaps=0.5,
                  threshold_focus_cols_frac_gaps=0.3,
-                 remove_sequences_with_indeterminate_AA_in_focus_cols=True
+                 remove_sequences_with_indeterminate_AA_in_focus_cols=True,
+                 num_cpus=1,
                  ):
 
         """
@@ -51,6 +52,7 @@ class MSA_processing:
             - positions with a fraction of gap characters above threshold_focus_cols_pct_gaps will be set to lower case (and not included in the focus_cols)
             - default is set to 0.3 (i.e., focus positions are the ones with 30% of gaps or less, i.e., 70% or more residue occupancy)
         - remove_sequences_with_indeterminate_AA_in_focus_cols: (bool) Remove all sequences that have indeterminate AA (e.g., B, J, X, Z) at focus positions of the wild type
+        - num_cpus: (int) Number of CPUs to use for parallel weights calculation processing
         """
         np.random.seed(2021)
         self.MSA_location = MSA_location
@@ -77,7 +79,7 @@ class MSA_processing:
         self.all_single_mutations = None
 
         # Fill in the instance variables
-        self.gen_alignment()
+        self.gen_alignment(num_cpus=num_cpus)
         self.create_all_singles()
 
     def gen_alignment(self, num_cpus=1):
@@ -196,6 +198,7 @@ class MSA_processing:
                 _ = calc_weights_evcouplings(sequences_mapped[:10], identity_threshold=1 - self.theta,
                                              empty_value=0, num_cpus=num_cpus)  # GAP = 0
                 print("JIT function compiled/run in {} seconds".format(time.perf_counter() - start))
+                # TODO temporary speed tests
                 # del sequences
                 print("Checking runtime for JIT function with different args")
                 start = time.perf_counter()
@@ -248,8 +251,8 @@ class MSA_processing:
                 self.weights = ev
                 # del sequences_mapped
                 print("Saving sequence weights to disk")
-                assert np.array_equal(eve, ev), "EVCouplings and EVE weights are not equal"
-                exit()
+                # Also a temporary check
+                assert np.array_equal(eve, ev), f"EVCouplings and EVE weights are not equal. EVcouplings weights: {ev}, EVE weights: {eve}"
                 np.save(file=self.weights_location, arr=self.weights)
 
         else:
