@@ -26,7 +26,8 @@ export CONDA_BIN=/home/lov701/miniconda3/bin/
 
 # Assumes that the conda environment is up to date
 echo "Assuming the conda environment protein_env is up to date"
-source "$CONDA_BIN"/activate protein_env
+# Note: this sometimes fails on the cluster, maybe I should just use the conda_bin/python3 directly..
+#source "$CONDA_BIN"/activate protein_env
 
 export MSA_data_folder="/n/groups/marks/users/lood/DeepSequence_runs/msa_tkmer_20220227"
 export MSA_list='./data/mappings/mapping_msa_tkmer_20220227.csv'
@@ -34,7 +35,7 @@ export num_cpus="${SLURM_CPUS_PER_TASK}"
 export MSA_weights_location='./data/weights_'$num_cpus'cpu/'
 export protein_index=$SLURM_ARRAY_TASK_ID
 
-srun python calc_weights.py \
+srun /home/lov701/miniconda3/envs/protein_env/bin/python3 calc_weights.py \
     --MSA_data_folder ${MSA_data_folder} \
     --MSA_list ${MSA_list} \
     --protein_index "${protein_index}" \
