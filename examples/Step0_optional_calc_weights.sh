@@ -14,7 +14,7 @@
 # Nice tip: using %3a to pad job array number to 3 digits (23 -> 023)
 #SBATCH --output=logs/slurm_files/slurm-lvn-%A_%3a-%x.out  # File to which STDOUT + STDERR will be written, %A: jobID, %a: array task ID, %x: jobname
 #SBATCH --array=0-73%10  		  # Job arrays (e.g. 1-100 with a maximum of 5 jobs at once)
-##SBATCH --array=0			      # Resubmitting / testing only first job
+#SBATCH --array=0			      # Resubmitting / testing only first job
 
 set -e # fail fully on first line failure (from Joost slurm_for_ml)
 
@@ -41,5 +41,5 @@ srun /home/lov701/miniconda3/envs/protein_env/bin/python3 calc_weights.py \
     --protein_index "${protein_index}" \
     --MSA_weights_location "${MSA_weights_location}" \
     --num_cpus "$num_cpus" \
-    --calc_method EVCOUPLINGS_NUMBA
-#    --skip_existing
+    --calc_method EVCOUPLINGS_NUMBA \
+    --skip_existing
