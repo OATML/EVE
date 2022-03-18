@@ -47,8 +47,11 @@ if __name__ == '__main__':
     print("Theta MSA re-weighting: " + str(theta))
 
     if not os.path.isdir(args.MSA_weights_location):
-        raise NotADirectoryError(f"{args.MSA_weights_location} is not a directory."
-                                 f"Could create it automatically, but at the moment raising an error.")
+        os.makedirs(args.MSA_weights_location)
+        print(f"{args.MSA_weights_location} is not a directory. "
+              f"Being nice and creating it for you, but this might be a mistake.")
+        # raise NotADirectoryError(f"{args.MSA_weights_location} is not a directory."
+        #                          f"Could create it automatically, but at the moment raising an error.")
 
     weights_file = args.MSA_weights_location + os.sep + protein_name + '_theta_' + str(theta) + '.npy'
     # First check that the weights file doesn't exist
