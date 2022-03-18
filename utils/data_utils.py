@@ -253,6 +253,7 @@ class MSA_processing:
                 print("Saving sequence weights to disk")
                 # Also a temporary check
                 assert np.array_equal(eve, ev), f"EVCouplings and EVE weights are not equal. EVcouplings weights: {ev}, EVE weights: {eve}"
+                print("EVCouple and EVE weights are equal")  #tmp
                 np.save(file=self.weights_location, arr=self.weights)
 
         else:
