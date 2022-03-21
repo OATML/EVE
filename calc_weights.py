@@ -60,7 +60,7 @@ if __name__ == '__main__':
             print("Weights file already exists, skipping")
             exit(0)
         else:
-            raise FileExistsError(f"File {weights_file} already exists."
+            raise FileExistsError(f"File {weights_file} already exists. "
                                   f"Please delete it if you want to re-calculate it. "
                                   f"If you want to skip existing files, use --skip_existing.")
 

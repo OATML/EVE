@@ -112,6 +112,7 @@ class MSA_processing:
 
         ## MSA pre-processing to remove inadequate columns and sequences
         if self.preprocess_MSA:
+            print("Pre-processing MSA to remove inadequate columns and sequences...")
             msa_df = pd.DataFrame.from_dict(self.seq_name_to_sequence, orient='index', columns=['sequence'])
             # Data clean up
             msa_df.sequence = msa_df.sequence.apply(lambda x: x.replace(".", "-")).apply(
@@ -205,6 +206,7 @@ class MSA_processing:
                     sequences_mapped = map_matrix(sequences, alphabet_mapper)
                     print("Compiling JIT function")
                     start = time.perf_counter()
+                    # TODO could also check the speedup here?
                     # Compile jit function
                     _ = calc_weights_evcouplings(sequences_mapped[:10], identity_threshold=1 - self.theta,
                                                  empty_value=0, num_cpus=num_cpus)  # GAP = 0
@@ -240,6 +242,17 @@ class MSA_processing:
                     _ = calc_weights_evcouplings(sequences_mapped[:100000], identity_threshold=1 - self.theta,
                                                  empty_value=0, num_cpus=num_cpus)  # GAP = 0
                     print("JIT function with length 100k run in {} seconds".format(time.perf_counter() - start))
+                    runtime_parallel = time.perf_counter() - start
+                    # Init/compile EVCouplings weights calc for 1 CPU (different path than parallel)
+                    print("Checking runtime for 1 cpu")
+                    _ = calc_weights_evcouplings(sequences_mapped[:100000], identity_threshold=1 - self.theta,
+                                                 empty_value=0, num_cpus=1)  # GAP = 0
+                    start_1cpu = time.perf_counter()
+                    _ = calc_weights_evcouplings(sequences_mapped[:100000], identity_threshold=1 - self.theta,
+                                                 empty_value=0, num_cpus=1)  # GAP = 0
+                    runtime_1cpu = time.perf_counter() - start_1cpu
+                    print("1 CPU JIT function with length 100k run in {} seconds".format(runtime_1cpu))
+                    print(f"Speedup: {runtime_1cpu / runtime_parallel:.2f}x for {num_cpus} CPUs")
 
                     print("Starting EVCouplings calculation")
                     start = time.perf_counter()
@@ -265,7 +278,7 @@ class MSA_processing:
                     # Also a temporary check
                     assert np.array_equal(eve, ev), f"EVCouplings and EVE weights are not equal. EVcouplings weights: {ev}, EVE weights: {eve}"
                     # del sequences_mapped
-                    print("EVCouple and EVE weights are equal")  # tmp
+                    print("EVCouplings and EVE weights are equal")  # tmp
 
                 print("Saving sequence weights to disk")
                 np.save(file=self.weights_location, arr=self.weights)
@@ -559,7 +572,7 @@ def calc_num_cluster_members_nogaps_parallel(matrix, identity_threshold, invalid
 # Below are util functions copied from EVCouplings: https://github.com/debbiemarkslab/EVcouplings
 # This code looks slow but it's because it's written as a numba kernel
 # Fastmath should be safe here, as we can assume that there are no NaNs in the input etc.
-@numba.jit(nopython=True, fastmath=True, parallel=True)
+@numba.jit(nopython=True, fastmath=True) # , parallel=True
 def calc_num_cluster_members_nogaps(matrix, identity_threshold, invalid_value):
     """
     From EVCouplings: https://github.com/debbiemarkslab/EVcouplings
@@ -651,25 +664,42 @@ def calc_weights_evcouplings(matrix_mapped, identity_threshold, empty_value, num
         """
     empty_idx = is_empty_sequence_matrix(matrix_mapped,
                                          empty_value=empty_value)  # e.g. sequences with just gaps or lowercase, no valid AAs
+    N = matrix_mapped.shape[0]
 
     # Original EVCouplings code structure, plus gap handling
     if num_cpus > 1:
+        # Numba parallel:
         # This works on the datasets I've tested on, but probably a good idea to report it anyway
-        print("Calculating weights using Numba parallel (experimental) since num_cpus > 1. "
+        # print("Calculating weights using Numba parallel (experimental) since num_cpus > 1. "
+        #       "If you want to disable multiprocessing set num_cpus=1.")
+        # print("Default number of threads for Numba:", numba.config.NUMBA_NUM_THREADS)
+        # # num_cpus > numba.config.NUMBA_NUM_THREADS will give an error.
+        # # But we'll leave it so that the user has to be explicit.
+        # numba.set_num_threads(num_cpus)
+        # print("Set number of threads to:", numba.get_num_threads())
+        # num_cluster_members = calc_num_cluster_members_nogaps_parallel(matrix_mapped[~empty_idx], identity_threshold,
+        #                                                                invalid_value=empty_value)
+        print("Num CPUs for EVCouplings code:", num_cpus)
+        print(f"Calculating weights using Numba JIT and multiprocessing (experimental) since num_cpus ({num_cpus}) > 1. "
               "If you want to disable multiprocessing set num_cpus=1.")
-        print("Default number of threads for Numba:", numba.config.NUMBA_NUM_THREADS)
-        # num_cpus > numba.config.NUMBA_NUM_THREADS will give an error.
-        # But we'll leave it so that the user has to be explicit.
-        numba.set_num_threads(num_cpus)
-        print("Set number of threads to:", numba.get_num_threads())
-        num_cluster_members = calc_num_cluster_members_nogaps_parallel(matrix_mapped[~empty_idx], identity_threshold,
-                                                                       invalid_value=empty_value)
+        with multiprocessing.Pool(processes=num_cpus, initializer=init_worker_ev,
+                                  initargs=(matrix_mapped[~empty_idx], empty_value, identity_threshold)) as pool:
+            # Simply: Chunksize is between 1 and 64, preferably N / num_cpus / 16,
+            # so every CPU gets an 8th of their expected total every time they ask for more work.
+            #  Too small values: Too much overhead sending simple indexes to workers, and them sending back results.
+            #  Too large: May wait a while for the last worker's task to finish.
+            chunksize = max(1, min(64, int(N / num_cpus / 16)))
+            print("chunksize: " + str(chunksize))
+
+            # imap: Lazy version of map
+            # Parallel progress bars are complicated and pollute logs
+            cluster_map = tqdm(pool.imap(_worker_func, range(N), chunksize=chunksize), total=N, mininterval=1)
+            num_cluster_members = np.array(list(cluster_map))
     else:
         num_cluster_members = calc_num_cluster_members_nogaps(matrix_mapped[~empty_idx], identity_threshold,
                                                               invalid_value=empty_value)
 
     # Empty sequences: weight 0
-    N = matrix_mapped.shape[0]
     weights = np.zeros((N))
     weights[~empty_idx] = 1.0 / num_cluster_members
     return weights
@@ -740,39 +770,39 @@ def map_matrix(matrix, map_):
 
 # Idea 3)
 # Multiprocessing with numba jit:
-# def init_worker_ev(matrix, empty_value, identity_threshold):
-#     global matrix_mapped_global
-#     matrix_mapped_global = matrix
-#     L = matrix.shape[1]
-#     global empty_value_global
-#     empty_value_global = empty_value
-#     global identity_threshold_global
-#     identity_threshold_global = identity_threshold
-#     global L_i_global
-#     L_i_global = L - np.sum(matrix == empty_value, axis=1)
-#     print("Initialising worker")
-#     global global_calc_num_clusters_i
-#     global_calc_num_clusters_i = _global_calc_cluster_factory()
-#     try:
-#         _ = global_calc_num_clusters_i(0)
-#     except Exception as e:
-#         print("Worker initialisation failed:", e)
-#         raise e
-#     print("Function compiled")
-#
-#
-# def _worker_func(i):
-#     return global_calc_num_clusters_i(i)
-#
-#
-# def _global_calc_cluster_factory():
-#     @numba.jit(nopython=True)
-#     def func(i):
-#         return calc_num_clusters_i(matrix_mapped_global, identity_threshold_global, empty_value_global, i, L_non_gaps=L_i_global[i])
-#     # out = calc_num_clusters_i(matrix=matrix_mapped_global, identity_threshold=identity_threshold_global, invalid_value=empty_value_global, i=i, L_non_gaps=L_i_global[i])
-#     # print("Calculated, sending back ", out)
-#     # return out
-#     return func
+def init_worker_ev(matrix, empty_value, identity_threshold):
+    global matrix_mapped_global
+    matrix_mapped_global = matrix
+    L = matrix.shape[1]
+    global empty_value_global
+    empty_value_global = empty_value
+    global identity_threshold_global
+    identity_threshold_global = identity_threshold
+    global L_i_global
+    L_i_global = L - np.sum(matrix == empty_value, axis=1)
+    print("Initialising worker")
+    global global_calc_num_clusters_i
+    global_calc_num_clusters_i = _global_calc_cluster_factory()
+    try:
+        _ = global_calc_num_clusters_i(0)  # Timeout, and numba verbosity
+    except Exception as e:
+        print("Worker initialisation failed:", e)
+        raise e
+    print("Function compiled")
+
+
+def _worker_func(i):
+    return global_calc_num_clusters_i(i)
+
+
+def _global_calc_cluster_factory():
+    # @numba.jit(nopython=True)
+    def func(i):
+        return calc_num_clusters_i(matrix_mapped_global, identity_threshold_global, empty_value_global, i, L_non_gaps=L_i_global[i])
+    # out = calc_num_clusters_i(matrix=matrix_mapped_global, identity_threshold=identity_threshold_global, invalid_value=empty_value_global, i=i, L_non_gaps=L_i_global[i])
+    # print("Calculated, sending back ", out)
+    # return out
+    return func
 
 # Inside calling function calc_weights_evcouplings_parallel
 # if num_cpus > 1:
@@ -787,50 +817,50 @@ def map_matrix(matrix, map_):
 #     # Parallel progress bars are complicated
 #     cluster_map = tqdm(pool.imap(_worker_func, range(N), chunksize=chunksize), total=N)
 
-@numba.jit(nopython=True, fastmath=True, parallel=True)
-def calc_num_pairs(matrix, identity_threshold, invalid_value):
-    """
-    From EVCouplings: https://github.com/debbiemarkslab/EVcouplings
-    Calculate number of sequences in alignment
-    within given identity_threshold of each other
-    Parameters
-    ----------
-    matrix : np.array
-        N x L matrix containing N sequences of length L.
-        Matrix must be mapped to range(0, num_symbols) using
-        map_matrix function
-    identity_threshold : float
-        Sequences with at least this pairwise identity will be
-        grouped in the same cluster.
-    Returns
-    -------
-    np.array
-        Vector of length N containing number of cluster
-        members for each sequence (inverse of sequence
-        weight)
-    """
-    N, L = matrix.shape
-    # L = 1.0 * L  # need to tell numba that L is a float
-
-    # Empty sequences are filtered out before this function and are ignored
-    # minimal cluster size is 1 (self)
-    # L_non_gaps = L - np.sum(matrix == invalid_value, axis=1)  # Edit: From EVE, use the non-gapped length
-    neighbour_matrix = np.eye(N)  # dtype=np.bool
-    # debug_val = 289
-    # tmp_pairs = []
-    # Crucial: We assume none of the sequences are empty
-    # Construct a loop that counts a neighbour if the pairwise identity is above the threshold
-    pairs_j = np.zeros(N, dtype=np.int32)
-    for i in range(N):
-        # Calculate the non-gapped length of sequence i
-        # L_i = np.sum(matrix[i] != invalid_value)  # Can either use L_i or L_j to calculate the neighbor matrix, the output will simply be transposed
-        pairs_j[:] = 0
-        for j in range(N):
-            num_pairs = 0
-            for k in range(L):
-                if matrix[i, k] == matrix[j, k] and matrix[i, k] != invalid_value:
-                    num_pairs += 1
-            pairs_j[j] = num_pairs  # Could also just add this as an array at the end of j loop
-        neighbour_matrix[i] = pairs_j  # Could also calc identity threshold here
-
-    return neighbour_matrix
+# @numba.jit(nopython=True, fastmath=True, parallel=True)
+# def calc_num_pairs(matrix, identity_threshold, invalid_value):
+#     """
+#     From EVCouplings: https://github.com/debbiemarkslab/EVcouplings
+#     Calculate number of sequences in alignment
+#     within given identity_threshold of each other
+#     Parameters
+#     ----------
+#     matrix : np.array
+#         N x L matrix containing N sequences of length L.
+#         Matrix must be mapped to range(0, num_symbols) using
+#         map_matrix function
+#     identity_threshold : float
+#         Sequences with at least this pairwise identity will be
+#         grouped in the same cluster.
+#     Returns
+#     -------
+#     np.array
+#         Vector of length N containing number of cluster
+#         members for each sequence (inverse of sequence
+#         weight)
+#     """
+#     N, L = matrix.shape
+#     # L = 1.0 * L  # need to tell numba that L is a float
+#
+#     # Empty sequences are filtered out before this function and are ignored
+#     # minimal cluster size is 1 (self)
+#     # L_non_gaps = L - np.sum(matrix == invalid_value, axis=1)  # Edit: From EVE, use the non-gapped length
+#     neighbour_matrix = np.eye(N)  # dtype=np.bool
+#     # debug_val = 289
+#     # tmp_pairs = []
+#     # Crucial: We assume none of the sequences are empty
+#     # Construct a loop that counts a neighbour if the pairwise identity is above the threshold
+#     pairs_j = np.zeros(N, dtype=np.int32)
+#     for i in range(N):
+#         # Calculate the non-gapped length of sequence i
+#         # L_i = np.sum(matrix[i] != invalid_value)  # Can either use L_i or L_j to calculate the neighbor matrix, the output will simply be transposed
+#         pairs_j[:] = 0
+#         for j in range(N):
+#             num_pairs = 0
+#             for k in range(L):
+#                 if matrix[i, k] == matrix[j, k] and matrix[i, k] != invalid_value:
+#                     num_pairs += 1
+#             pairs_j[j] = num_pairs  # Could also just add this as an array at the end of j loop
+#         neighbour_matrix[i] = pairs_j  # Could also calc identity threshold here
+#
+#     return neighbour_matrix
