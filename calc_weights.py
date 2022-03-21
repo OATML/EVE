@@ -47,7 +47,8 @@ if __name__ == '__main__':
     print("Theta MSA re-weighting: " + str(theta))
 
     if not os.path.isdir(args.MSA_weights_location):
-        os.makedirs(args.MSA_weights_location)
+        # exist_ok=True: Otherwise we'll get some race conditions between concurrent jobs
+        os.makedirs(args.MSA_weights_location, exist_ok=True)
         print(f"{args.MSA_weights_location} is not a directory. "
               f"Being nice and creating it for you, but this might be a mistake.")
         # raise NotADirectoryError(f"{args.MSA_weights_location} is not a directory."
