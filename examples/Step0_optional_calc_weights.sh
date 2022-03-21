@@ -17,7 +17,7 @@
 
 set -e # fail fully on first line failure (from Joost slurm_for_ml)
 
-# Send python outputs (like script) directly to terminal/log without buffering
+# Send python outputs (like print) directly to terminal/log without buffering
 export PYTHONUNBUFFERED=1
 
 echo "hostname: $(hostname)"
