@@ -174,7 +174,8 @@ class MSA_processing:
         self.one_hot_encoding = one_hot_3D(
             seq_keys=self.seq_name_to_sequence.keys(),  # Note: Dicts are unordered for python < 3.6
             seq_name_to_sequence=self.seq_name_to_sequence,
-            msa_data=self,  # Simply pass ourselves as the msa_data object
+            alphabet=self.alphabet,
+            seq_length=self.seq_len,
         )
 
         self.calc_weights(num_cpus=num_cpus)
@@ -300,15 +301,15 @@ def generate_mutated_sequences(msa_data, list_mutations):
 
 # Copied from VAE_model.compute_evol_indices
 # One-hot encoding of sequences
-def one_hot_3D(seq_keys, seq_name_to_sequence, msa_data):
+def one_hot_3D(seq_keys, seq_name_to_sequence, alphabet, seq_length):
     """
-    Take in a list of sequence names and corresponding sequences, and generate a one-hot array according to an alphabet.
+    Take in a list of sequence names/keys and corresponding sequences, and generate a one-hot array according to an alphabet.
     """
-    aa_dict = {letter: i for (i, letter) in enumerate(msa_data.alphabet)}
+    aa_dict = {letter: i for (i, letter) in enumerate(alphabet)}
 
-    one_hot_out = np.zeros((len(seq_keys), len(msa_data.focus_cols), len(msa_data.alphabet)))
-    for i, mutation in enumerate(seq_keys):
-        sequence = seq_name_to_sequence[mutation]
+    one_hot_out = np.zeros((len(seq_keys), seq_length, len(alphabet)))
+    for i, seq_key in enumerate(seq_keys):
+        sequence = seq_name_to_sequence[seq_key]
         for j, letter in enumerate(sequence):
             if letter in aa_dict:
                 k = aa_dict[letter]

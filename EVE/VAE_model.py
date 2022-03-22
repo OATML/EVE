@@ -12,6 +12,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
 
+from utils.data_utils import one_hot_3D
 from . import VAE_encoder, VAE_decoder
 
 class VAE_model(nn.Module):
@@ -332,13 +333,7 @@ class VAE_model(nn.Module):
                 list_valid_mutated_sequences[mutation] = ''.join(mutated_sequence)
 
         #One-hot encoding of mutated sequences
-        mutated_sequences_one_hot = np.zeros((len(list_valid_mutations),len(msa_data.focus_cols),len(msa_data.alphabet)))
-        for i,mutation in enumerate(list_valid_mutations):
-            sequence = list_valid_mutated_sequences[mutation]
-            for j,letter in enumerate(sequence):
-                if letter in msa_data.aa_dict:
-                    k = msa_data.aa_dict[letter]
-                    mutated_sequences_one_hot[i,j,k] = 1.0
+        mutated_sequences_one_hot = one_hot_3D(list_valid_mutations, list_valid_mutated_sequences, alphabet=msa_data.alphabet, seq_length=len(msa_data.focus_cols))
 
         mutated_sequences_one_hot = torch.tensor(mutated_sequences_one_hot)
         dataloader = torch.utils.data.DataLoader(mutated_sequences_one_hot, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)

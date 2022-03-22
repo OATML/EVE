@@ -3,12 +3,10 @@ import time
 from collections import defaultdict
 
 import numba
-import numpy as np
-
 from numba import prange
-from tqdm import tqdm
 
-from utils.data_utils import GAP
+import numpy as np
+from tqdm import tqdm
 
 
 def compute_weight_eve(seq, list_seq, theta):
@@ -247,7 +245,7 @@ def _global_calc_cluster_factory():
 
 
 # Copied from EVCouplings
-def map_from_alphabet(alphabet, default=GAP):
+def map_from_alphabet(alphabet, default):
     """
     Creates a mapping dictionary from a given alphabet.
     Parameters
