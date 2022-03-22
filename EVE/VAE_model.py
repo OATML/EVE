@@ -148,19 +148,6 @@ class VAE_model(nn.Module):
         neg_ELBO = BCE + warm_up_scale * (kl_latent_scale * KLD_latent + kl_global_params_scale * KLD_decoder_params_normalized)
         return neg_ELBO, BCE, KLD_latent, KLD_decoder_params_normalized
 
-    def beta_vae_loss(self, x_recon_log, x, mu, log_var, kl_latent_scale, kl_global_params_scale, annealing_warm_up, training_step, Neff, beta):
-        """Loss from beta-vae paper, but added bayesian decoder prior & KL annealing to match previous loss function"""
-
-        BCE = F.binary_cross_entropy_with_logits(x_recon_log, x, reduction='sum') / x.shape[0]
-        KLD_latent = (-0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp())) / x.shape[0]
-        if self.decoder.bayesian_decoder:
-            KLD_decoder_params_normalized = self.KLD_global_parameters() / Neff
-        else:
-            KLD_decoder_params_normalized = 0.0
-        warm_up_scale = self.annealing_factor(annealing_warm_up, training_step)
-        neg_ELBO = BCE + warm_up_scale * (beta * kl_latent_scale * KLD_latent + kl_global_params_scale * KLD_decoder_params_normalized)
-        return neg_ELBO, BCE, KLD_latent, KLD_decoder_params_normalized
-
     def all_likelihood_components(self, x):
         """
         Returns tensors of ELBO, reconstruction loss and KL divergence for each point in batch x.
@@ -233,9 +220,7 @@ class VAE_model(nn.Module):
             z = self.sample_latent(mu, log_var)
             recon_x_log = self.decoder(z)
 
-            beta = training_parameters.get('beta', 1)  # Normal VAE loss is beta = 1
-
-            neg_ELBO, BCE, KLD_latent, KLD_decoder_params_normalized = self.beta_vae_loss(recon_x_log, x, mu, log_var, training_parameters['kl_latent_scale'], training_parameters['kl_global_params_scale'], training_parameters['annealing_warm_up'], training_step, self.Neff_training, beta=beta)
+            neg_ELBO, BCE, KLD_latent, KLD_decoder_params_normalized = self.loss_function(recon_x_log, x, mu, log_var, training_parameters['kl_latent_scale'], training_parameters['kl_global_params_scale'], training_parameters['annealing_warm_up'], training_step, self.Neff_training)
 
             neg_ELBO.backward()
             optimizer.step()
@@ -251,7 +236,7 @@ class VAE_model(nn.Module):
                     with open(filename, "a+") as logs:
                         logs.write(progress+"\n")
 
-            if training_step % training_parameters['save_model_params_freq']==0:
+            if training_step % training_parameters['save_model_params_freq'] == 0:
                 self.save(model_checkpoint=training_parameters['model_checkpoint_location']+os.sep+self.model_name+"_step_"+str(training_step),
                             encoder_parameters=encoder_parameters,
                             decoder_parameters=decoder_parameters,

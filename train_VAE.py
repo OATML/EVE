@@ -1,12 +1,13 @@
-import os, sys
 import argparse
-import pandas as pd
 import json
+import os
+
+import pandas as pd
 
 from EVE import VAE_model
 from utils import data_utils
 
-if __name__=='__main__':
+if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='VAE')
     parser.add_argument('--MSA_data_folder', type=str, help='Folder where MSAs are stored', required=True)
     parser.add_argument('--MSA_list', type=str, help='List of proteins and corresponding MSA file name', required=True)
@@ -15,7 +16,7 @@ if __name__=='__main__':
     parser.add_argument('--theta_reweighting', type=float, help='Parameters for MSA sequence re-weighting')
     parser.add_argument('--VAE_checkpoint_location', type=str, help='Location where VAE model checkpoints will be stored', required=True)
     parser.add_argument('--model_name_suffix', default='Jan1', type=str, help='model checkpoint name will be the protein name followed by this suffix')
-    parser.add_argument('--model_parameters_location', type=str, help='Location of VAE model parameters')
+    parser.add_argument('--model_parameters_location', type=str, help='Location of VAE model parameters', required=True)
     parser.add_argument('--training_logs_location', type=str, help='Location of VAE model parameters')
     parser.add_argument('--z_dim', type=int, help='Specify a different latent dim than in the params file')
     parser.add_argument('--force_load_weights', action='store_true', help="Force loading of weights from MSA_weights_location (useful if you want to make sure you're using precalculated weights). Will fail if weight file doesn't exist.", default=False)
@@ -78,15 +79,13 @@ if __name__=='__main__':
 
     model_params["training_parameters"]['training_logs_location'] = args.training_logs_location
     model_params["training_parameters"]['model_checkpoint_location'] = args.VAE_checkpoint_location
-    
-    # model_params["training_parameters"]["num_training_steps"] = 1000 # todo temp debugging
 
     print("Starting to train model: " + model_name)
     model.train_model(data=data, training_parameters=model_params["training_parameters"])
 
     print("Saving model: " + model_name)
-    model.save(model_checkpoint=model_params["training_parameters"]['model_checkpoint_location']+os.sep+model_name+"_final", 
-                encoder_parameters=model_params["encoder_parameters"], 
-                decoder_parameters=model_params["decoder_parameters"], 
+    model.save(model_checkpoint=model_params["training_parameters"]['model_checkpoint_location']+os.sep+model_name+"_final",
+                encoder_parameters=model_params["encoder_parameters"],
+                decoder_parameters=model_params["decoder_parameters"],
                 training_parameters=model_params["training_parameters"]
     )
