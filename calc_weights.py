@@ -7,8 +7,8 @@ import numpy as np
 import pandas as pd
 
 from utils import data_utils
-from utils.data_utils import calc_weights_evcouplings, map_from_alphabet, ALPHABET_PROTEIN_GAP, GAP, \
-    map_matrix
+from utils.data_utils import GAP, ALPHABET_PROTEIN_GAP
+from utils.weights import calc_weights_evcouplings, map_matrix, map_from_alphabet
 
 
 def create_argparser():
