@@ -18,6 +18,8 @@ if __name__=='__main__':
     parser.add_argument('--model_parameters_location', type=str, help='Location of VAE model parameters')
     parser.add_argument('--training_logs_location', type=str, help='Location of VAE model parameters')
     parser.add_argument('--z_dim', type=int, help='Specify a different latent dim than in the params file')
+    parser.add_argument('--force_load_weights', action='store_true', help="Force loading of weights from MSA_weights_location (useful if you want to make sure you're using precalculated weights). Will fail if weight file doesn't exist.", default=False)
+
     args = parser.parse_args()
 
     print("Arguments:", args)
@@ -39,11 +41,19 @@ if __name__=='__main__':
             theta = 0.2
     print("Theta MSA re-weighting: "+str(theta))
 
+
+    weights_file = args.MSA_weights_location + os.sep + protein_name + '_theta_' + str(theta) + '.npy'
+    if args.force_load_weights:
+        print("Flag force_load_weights enabled - Forcing that we use weights from file:", weights_file)
+        if not os.path.isfile(weights_file):
+            raise FileNotFoundError(f"Weights file {weights_file} doesn't exist. "
+                                    f"To recompute weights, remove the flag --force_load_weights.")
+
     data = data_utils.MSA_processing(
             MSA_location=msa_location,
             theta=theta,
             use_weights=True,
-            weights_location=args.MSA_weights_location + os.sep + protein_name + '_theta_' + str(theta) + '.npy'
+            weights_location=weights_file,
     )
 
     model_name = protein_name + "_" + args.model_name_suffix
