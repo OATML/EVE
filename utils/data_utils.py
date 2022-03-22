@@ -52,7 +52,7 @@ class MSA_processing:
             - positions with a fraction of gap characters above threshold_focus_cols_pct_gaps will be set to lower case (and not included in the focus_cols)
             - default is set to 0.3 (i.e., focus positions are the ones with 30% of gaps or less, i.e., 70% or more residue occupancy)
         - remove_sequences_with_indeterminate_AA_in_focus_cols: (bool) Remove all sequences that have indeterminate AA (e.g., B, J, X, Z) at focus positions of the wild type
-        - num_cpus: (int) Number of CPUs to use for parallel weights calculation processing
+        - num_cpus: (int) Number of CPUs to use for parallel weights calculation processing. If set to -1, all available CPUs are used. If set to 1, weights are computed in serial.
         """
         np.random.seed(2021)
         self.MSA_location = MSA_location
@@ -185,6 +185,12 @@ class MSA_processing:
         print("Data Shape =", self.one_hot_encoding.shape)
 
     def calc_weights(self, num_cpus=1, method="evcouplings"):
+        """
+        If num_cpus == 1, weights are computed in serial.
+        If num_cpus == -1, weights are computed in parallel using all available cores.
+        Note: This will use multiprocessing.cpu_count() to get the number of available cores, which on clusters may
+        return all cores, not just the number of cores available to the user.
+        """
         # Refactored into its own function so that we can call it separately
         if self.use_weights:
             if os.path.isfile(self.weights_location):
@@ -192,6 +198,10 @@ class MSA_processing:
                 self.weights = np.load(file=self.weights_location)
             else:
                 print("Computing sequence weights")
+                if num_cpus == -1:
+                    num_cpus = multiprocessing.cpu_count()
+                    print("Using all available cores (calculated using multiprocessing.cpu_count()):", num_cpus)
+
                 if method == "evcouplings":
                     alphabet_mapper = map_from_alphabet(ALPHABET_PROTEIN_GAP, default=GAP)
                     arrays = []
@@ -575,7 +585,7 @@ def calc_weights_evcouplings(matrix_mapped, identity_threshold, empty_value, num
     N = matrix_mapped.shape[0]
 
     # Original EVCouplings code structure, plus gap handling
-    if num_cpus >= 1:  # TODO tmp!
+    if num_cpus >= 1:  # TODO tmp >=!
         # Numba parallel:
         # This works on the datasets I've tested on, but probably a good idea to report it anyway
         # print("Calculating weights using Numba parallel (experimental) since num_cpus > 1. "

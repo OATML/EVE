@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -c 40                             # Request ten cores for parallel weights calc
+#SBATCH -c 8                             # Request ten cores for parallel weights calc
 #SBATCH -N 1                              # Request one node (if you request more than one core with -c, also using
                                           # -N 1 means all cores will be on the same node)
 #SBATCH -t 0-0:59                         # Runtime in D-HH:MM format
@@ -9,12 +9,11 @@
 #SBATCH --mail-type=TIME_LIMIT_80,TIME_LIMIT,FAIL,ARRAY_TASKS
 #SBATCH --mail-user="lodevicus_vanniekerk@hms.harvard.edu"
 
-#SBATCH --job-name="eve_weights_40cpu"
+#SBATCH --job-name="eve_weights_8cpu"
 # Job array-specific
 # Nice tip: using %3a to pad job array number to 3 digits (23 -> 023)
 #SBATCH --output=logs/slurm_files/slurm-lvn-%A_%3a-%x.out  # File to which STDOUT + STDERR will be written, %A: jobID, %a: array task ID, %x: jobname
 #SBATCH --array=0-73%10  		  # Job arrays (e.g. 1-100 with a maximum of 5 jobs at once)
-#SBATCH --array=0-9           # tmp
 
 set -e # fail fully on first line failure (from Joost slurm_for_ml)
 

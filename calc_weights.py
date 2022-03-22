@@ -98,49 +98,52 @@ def main(args):
         _ = calc_weights_evcouplings(sequences_mapped[:10], identity_threshold=1 - theta,
                                      empty_value=0, num_cpus=num_cpus)  # GAP = 0
         print("JIT function compiled/run in {} seconds".format(time.perf_counter() - start))
-        # TODO temporary speed tests
-        # del sequences
-        print("Checking runtime for JIT function with different args")
-        start = time.perf_counter()
-        _ = calc_weights_evcouplings(sequences_mapped[:11], identity_threshold=1 - theta,
-                                     empty_value=0, num_cpus=num_cpus)  # GAP = 0
-        print("JIT function with length 11 run in {} seconds".format(time.perf_counter() - start))
+        if args.calc_speedup:
+            # del sequences
+            print("Checking runtime for JIT function with different args")
+            start = time.perf_counter()
+            _ = calc_weights_evcouplings(sequences_mapped[:11], identity_threshold=1 - theta,
+                                         empty_value=0, num_cpus=num_cpus)  # GAP = 0
+            print("JIT function with length 11 run in {} seconds".format(time.perf_counter() - start))
 
-        print("100 seqs:")
-        start = time.perf_counter()
-        _ = calc_weights_evcouplings(sequences_mapped[:100], identity_threshold=1 - theta,
-                                     empty_value=0, num_cpus=num_cpus)  # GAP = 0
-        print("JIT function with length 100 run in {} seconds".format(time.perf_counter() - start))
-        ###########################################################
-        print("1000 seqs:")
-        start = time.perf_counter()
-        _ = calc_weights_evcouplings(sequences_mapped[:1000], identity_threshold=1 - theta,
-                                     empty_value=0, num_cpus=num_cpus)  # GAP = 0
-        print("JIT function with length 1000 run in {} seconds".format(time.perf_counter() - start))
-        #######################################################################################################
-        print("10k seqs:")
-        start = time.perf_counter()
-        _ = calc_weights_evcouplings(sequences_mapped[:10000], identity_threshold=1 - theta,
-                                     empty_value=0, num_cpus=num_cpus)  # GAP = 0
-        print("JIT function with length 10k run in {} seconds".format(time.perf_counter() - start))
-        ##################################
-        print("100k seqs:")
-        start = time.perf_counter()
-        _ = calc_weights_evcouplings(sequences_mapped[:100000], identity_threshold=1 - theta,
-                                     empty_value=0, num_cpus=num_cpus)  # GAP = 0
-        print("JIT function with length 100k run in {} seconds".format(time.perf_counter() - start))
-        runtime_parallel = time.perf_counter() - start
-        # Init/compile EVCouplings weights calc for 1 CPU (different path than parallel)
-        print("Checking runtime for 1 cpu")
-        _ = calc_weights_evcouplings(sequences_mapped[:100000], identity_threshold=1 - theta,
-                                     empty_value=0, num_cpus=1)  # GAP = 0
-        start_1cpu = time.perf_counter()
-        _ = calc_weights_evcouplings(sequences_mapped[:100000], identity_threshold=1 - theta,
-                                     empty_value=0, num_cpus=1)  # GAP = 0
-        runtime_1cpu = time.perf_counter() - start_1cpu
-        print("1 CPU JIT function with length 100k run in {} seconds".format(runtime_1cpu))
-        print(f"Speedup: {runtime_1cpu / runtime_parallel:.2f}x for {num_cpus} CPUs")
+            print("100 seqs:")
+            start = time.perf_counter()
+            _ = calc_weights_evcouplings(sequences_mapped[:100], identity_threshold=1 - theta,
+                                         empty_value=0, num_cpus=num_cpus)  # GAP = 0
+            print("JIT function with length 100 run in {} seconds".format(time.perf_counter() - start))
+            ###########################################################
+            print("1000 seqs:")
+            start = time.perf_counter()
+            _ = calc_weights_evcouplings(sequences_mapped[:1000], identity_threshold=1 - theta,
+                                         empty_value=0, num_cpus=num_cpus)  # GAP = 0
+            print("JIT function with length 1000 run in {} seconds".format(time.perf_counter() - start))
+            #######################################################################################################
+            print("10k seqs:")
+            start = time.perf_counter()
+            _ = calc_weights_evcouplings(sequences_mapped[:10000], identity_threshold=1 - theta,
+                                         empty_value=0, num_cpus=num_cpus)  # GAP = 0
+            print("JIT function with length 10k run in {} seconds".format(time.perf_counter() - start))
+            ##################################
+            print("100k seqs:")
+            start = time.perf_counter()
+            _ = calc_weights_evcouplings(sequences_mapped[:100000], identity_threshold=1 - theta,
+                                         empty_value=0, num_cpus=num_cpus)  # GAP = 0
+            print("JIT function with length 100k run in {} seconds".format(time.perf_counter() - start))
+            runtime_parallel = time.perf_counter() - start
+            # Init/compile EVCouplings weights calc for 1 CPU (different path than parallel)
+            print("Checking runtime for 1 cpu")
+            _ = calc_weights_evcouplings(sequences_mapped[:100000], identity_threshold=1 - theta,
+                                         empty_value=0, num_cpus=1)  # GAP = 0
+            start_1cpu = time.perf_counter()
+            _ = calc_weights_evcouplings(sequences_mapped[:100000], identity_threshold=1 - theta,
+                                         empty_value=0, num_cpus=1)  # GAP = 0
+            runtime_1cpu = time.perf_counter() - start_1cpu
+            print("1 CPU JIT function with length 100k run in {} seconds".format(runtime_1cpu))
+            print(f"Speedup: {runtime_1cpu / runtime_parallel:.2f}x for {num_cpus} CPUs")
+
+        # Calculate and save weights
         ev = msa_data.calc_weights(num_cpus=num_cpus, method="evcouplings")
+
     if args.calc_method == "eve" or args.calc_method == "both":
         eve = msa_data.calc_weights(num_cpus=num_cpus, method="eve")
     if args.calc_method == "both":
