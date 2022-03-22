@@ -170,7 +170,7 @@ if __name__=='__main__':
             print(all_scores['EVE_classes_100_pct_retained'].value_counts(normalize=True))
         
         for quartile in [1,3]:
-            classification_name = 'GMM_class_'+str((quartile)*25)+"_pct_retained"
+            classification_name = 'EVE_classes_'+str((quartile)*25)+"_pct_retained"
             all_scores[classification_name] = all_scores['EVE_classes_100_pct_retained']
             all_scores.loc[all_scores['uncertainty'] > uncertainty_cutoffs_quartiles[str(quartile)], classification_name] = 'Uncertain'
             if args.verbose:
