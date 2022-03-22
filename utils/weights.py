@@ -5,7 +5,6 @@ from collections import defaultdict
 import numba
 import numpy as np
 
-# Can probably move most of the below to a different file
 from numba import prange
 from tqdm import tqdm
 
@@ -154,17 +153,6 @@ def calc_num_cluster_members_nogaps(matrix, identity_threshold, invalid_value):
                 num_neighbors[j] += 1
 
     return num_neighbors
-
-
-# Much faster using prange, but not sure how to tell numba we only got given a subset of cpus by slurm?
-@numba.jit(nopython=True, parallel=True)
-def func_all_i(matrix, identity_threshold, invalid_value, L_i):
-    N = matrix.shape[0]
-    num_clusters = np.zeros(N)
-    for i in prange(N):
-        num_clusters[i] = calc_num_clusters_i(matrix, identity_threshold=identity_threshold,
-                                              invalid_value=invalid_value, i=i, L_non_gaps=L_i[i])
-    return num_clusters
 
 
 def calc_weights_evcouplings(matrix_mapped, identity_threshold, empty_value, num_cpus=1):
@@ -339,8 +327,6 @@ def calc_num_cluster_members_nogaps_parallel(matrix, identity_threshold, invalid
     # minimal cluster size is 1 (self)
     num_neighbors = np.ones((N))
     L_non_gaps = L - np.sum(matrix == invalid_value, axis=1)  # Edit: From EVE, use the non-gapped length
-    # debug_val = 289
-    # tmp_pairs = []
     # compare all pairs of sequences
     # Edit: Rewrote loop without any dependencies between inner and outer loops, so that it can be parallelized
     for i in prange(N):
@@ -381,7 +367,6 @@ def calc_num_cluster_members_nogaps_parallel(matrix, identity_threshold, invalid
 # Inside calling function calc_weights_evcouplings_parallel
 # if num_cpus > 1:
 # Compute weights in parallel
-# num_cpus = 1  # tmp
 # print("Num CPUs for EVCouplings code:", num_cpus)
 # with multiprocessing.Pool(processes=num_cpus, initializer=init_worker_ev, initargs=(matrix_mapped[~empty_idx], empty_value, identity_threshold)) as pool:
 #     # func = functools.partial(compute_weight, list_seq=list_seq, theta=theta)
@@ -420,8 +405,6 @@ def calc_num_cluster_members_nogaps_parallel(matrix, identity_threshold, invalid
 #     # minimal cluster size is 1 (self)
 #     # L_non_gaps = L - np.sum(matrix == invalid_value, axis=1)  # Edit: From EVE, use the non-gapped length
 #     neighbour_matrix = np.eye(N)  # dtype=np.bool
-#     # debug_val = 289
-#     # tmp_pairs = []
 #     # Crucial: We assume none of the sequences are empty
 #     # Construct a loop that counts a neighbour if the pairwise identity is above the threshold
 #     pairs_j = np.zeros(N, dtype=np.int32)
@@ -448,3 +431,13 @@ def calc_num_cluster_members_nogaps_parallel(matrix, identity_threshold, invalid
 #                                               invalid_value=invalid_value, i=i,
 #                                               L_non_gaps=L_i[i])
 #     return pairs_matrix
+
+# Slower than numpy.prange
+# @numba.jit(nopython=True, parallel=True)
+# def func_all_i(matrix, identity_threshold, invalid_value, L_i):
+#     N = matrix.shape[0]
+#     num_clusters = np.zeros(N)
+#     for i in prange(N):
+#         num_clusters[i] = calc_num_clusters_i(matrix, identity_threshold=identity_threshold,
+#                                               invalid_value=invalid_value, i=i, L_non_gaps=L_i[i])
+#     return num_clusters
