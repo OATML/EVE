@@ -41,7 +41,8 @@ The entire codebase is written in python. Package requirements are as follows:
   - tqdm
   - matplotlib
   - seaborn
- 
+  - numba
+
 The corresponding environment may be created via conda and the provided protein_env.yml file as follows:
 ```
   conda env create -f protein_env.yml
