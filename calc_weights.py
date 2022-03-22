@@ -23,7 +23,7 @@ def create_argparser():
     # Note: It would be nicer to have an overwrite flag, but I don't want to change the MSAProcessing code too much
     parser.add_argument("--skip_existing", help="Will quit gracefully if weights file already exists", action="store_true", default=False)
     parser.add_argument("--calc_method", choices=["evcouplings", "eve", "both"], help="Method to use for calculating weights", default="evcouplings")
-
+    parser.add_argument("--calc_speedup", help="Print debug information", action="store_true", default=False)
     return parser
 
 
@@ -74,11 +74,12 @@ def main(args):
     msa_data = data_utils.MSA_processing(
         MSA_location=msa_location,
         theta=theta,
-        use_weights=True,
+        use_weights=False, #True,
         weights_location=weights_file,
         num_cpus=args.num_cpus,
     )
-    
+
+    msa_data.use_weights = True  # Manually set this so that we can check smaller runtimes first
     num_cpus = args.num_cpus
     
     # Below is for testing, will be removed from calc_weights.py
@@ -139,7 +140,6 @@ def main(args):
         runtime_1cpu = time.perf_counter() - start_1cpu
         print("1 CPU JIT function with length 100k run in {} seconds".format(runtime_1cpu))
         print(f"Speedup: {runtime_1cpu / runtime_parallel:.2f}x for {num_cpus} CPUs")
-
         ev = msa_data.calc_weights(num_cpus=num_cpus, method="evcouplings")
     if args.calc_method == "eve" or args.calc_method == "both":
         eve = msa_data.calc_weights(num_cpus=num_cpus, method="eve")

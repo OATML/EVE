@@ -325,31 +325,28 @@ def gen_one_hot_to_sequence(one_hot_tensor, alphabet):
 def one_hot_to_sequence_list(one_hot_tensor, alphabet):
     return list(gen_one_hot_to_sequence(one_hot_tensor, alphabet))
 
+# Can probably move most of the below to a different file
 
-# Could maybe use numba.jit for this? And/or could translate to torch and use GPU if it fits in memory?
-def compute_weight(seq, list_seq, theta, debug=False):
+def compute_weight_eve(seq, list_seq, theta):
     # seq shape: (L * alphabet_size,)
     number_non_empty_positions = np.sum(seq)  # = np.dot(seq,seq), assuming it is a flattened one-hot matrix
-    if debug:
-        print("number_non_empty_positions: " + str(number_non_empty_positions))
     if number_non_empty_positions > 0:
-        denom = np.dot(list_seq, seq) / number_non_empty_positions  # number_non_empty_positions = np.dot(seq,seq)
-        # if debug:
-        # print(np.where(denom > 1 - theta))
-        # print("raw denom 0,1,2,3,4,5,6", denom[[0,1,2,3,4,5,6]]*number_non_empty_positions)
+        # Dot product of one-hot vectors x and y = (x == y).sum()
+        matches = np.dot(list_seq, seq)
+        denom = matches / number_non_empty_positions  # number_non_empty_positions = np.dot(seq,seq)
         denom = np.sum(denom >= 1 - theta)  # Lood: Changed > to >=
         return 1 / denom
     else:
         return 0.0  # return 0 weight if sequence is fully empty
 
 
-def compute_weight_global(i):
+def _compute_weight_global(i):
     seq = list_seq_global[i]
     # seq shape: (L * alphabet_size,)
     number_non_empty_positions = np.sum(seq)  # = np.dot(seq,seq), assuming it is a flattened one-hot matrix
     if number_non_empty_positions > 0:
-        denom = np.dot(list_seq_global,
-                       seq) / number_non_empty_positions  # number_non_empty_positions = np.dot(seq,seq)
+        matches = np.dot(list_seq_global, seq)
+        denom = matches / number_non_empty_positions  # number_non_empty_positions = np.dot(seq,seq)
         # if debug:
         # print(np.where(denom > 1 - theta))
         # print("raw denom 0,1,2,3,4,5,6", denom[[0,1,2,3,4,5,6]]*number_non_empty_positions)
@@ -359,7 +356,7 @@ def compute_weight_global(i):
         return 0.0  # return 0 weight if sequence is fully empty
 
 
-def init_worker(list_seq, theta):
+def _init_worker_calc_eve(list_seq, theta):
     # Initialize the worker process
     # Note: Using global is not ideal, but not sure how else
     # It should be safe since processes have private global variables
@@ -376,43 +373,22 @@ def compute_sequence_weights(list_seq, theta, num_cpus=1):
     list_seq = list_seq.reshape((_N, _seq_len * _alphabet_size))
     print(f"Using {num_cpus} cpus for EVE weights computation")
 
-    # # Could maybe use numba.jit for this? And/or could translate to torch and use GPU if it fits in memory?
-    # def compute_weight(seq, debug=False):
-    #     # seq shape: (L * alphabet_size,)
-    #     number_non_empty_positions = np.sum(seq)  # = np.dot(seq,seq), assuming it is a flattened one-hot matrix
-    #     if debug:
-    #         print("number_non_empty_positions: " + str(number_non_empty_positions))
-    #     if number_non_empty_positions > 0:
-    #         denom = np.dot(list_seq, seq) / number_non_empty_positions  # number_non_empty_positions = np.dot(seq,seq)
-    #         # if debug:
-    #             # print(np.where(denom > 1 - theta))
-    #             # print("raw denom 0,1,2,3,4,5,6", denom[[0,1,2,3,4,5,6]]*number_non_empty_positions)
-    #         denom = np.sum(denom >= 1 - theta)  # Lood: Changed > to >=
-    #         return 1 / denom
-    #     else:
-    #         return 0.0  # return 0 weight if sequence is fully empty
-
     if num_cpus > 1:
         # Compute weights in parallel
-        with multiprocessing.Pool(processes=num_cpus, initializer=init_worker, initargs=(list_seq, theta)) as pool:
+        with multiprocessing.Pool(processes=num_cpus, initializer=_init_worker_calc_eve, initargs=(list_seq, theta)) as pool:
             # func = functools.partial(compute_weight, list_seq=list_seq, theta=theta)
             chunksize = max(min(8, int(_N / num_cpus / 4)), 1)
             print("chunksize: " + str(chunksize))
             # imap: Lazy version of map
             # Parallel progress bars are complicated, so just used a single one
-            weights_map = tqdm(pool.imap(compute_weight_global, range(_N), chunksize=chunksize),
+            weights_map = tqdm(pool.imap(_compute_weight_global, range(_N), chunksize=chunksize),
                                total=_N, desc="Computing weights parallel EVE")
             weights = np.array(list(weights_map))
     else:
-        weights_map = map(lambda seq: compute_weight(seq, list_seq=list_seq, theta=theta), list_seq)
+        weights_map = map(lambda seq: compute_weight_eve(seq, list_seq=list_seq, theta=theta), list_seq)
         weights = np.array(list(tqdm(weights_map, total=_N, desc="Computing weights serial EVE")))
 
     return weights
-
-
-def is_empty_sequence_one_hot(one_hot_matrix):
-    # Could also just use the literal value -1 or NaN, or GAP as in EVCouplings to denote empty in the original array?
-    return one_hot_matrix.reshape(one_hot_matrix.shape[0], -1).sum()
 
 
 def is_empty_sequence_matrix(matrix, empty_value):
@@ -599,7 +575,7 @@ def calc_weights_evcouplings(matrix_mapped, identity_threshold, empty_value, num
     N = matrix_mapped.shape[0]
 
     # Original EVCouplings code structure, plus gap handling
-    if num_cpus > 1:
+    if num_cpus >= 1:  # TODO tmp!
         # Numba parallel:
         # This works on the datasets I've tested on, but probably a good idea to report it anyway
         # print("Calculating weights using Numba parallel (experimental) since num_cpus > 1. "
@@ -615,7 +591,7 @@ def calc_weights_evcouplings(matrix_mapped, identity_threshold, empty_value, num
         print(
             f"Calculating weights using Numba JIT and multiprocessing (experimental) since num_cpus ({num_cpus}) > 1. "
             "If you want to disable multiprocessing set num_cpus=1.")
-        with multiprocessing.Pool(processes=num_cpus, initializer=init_worker_ev,
+        with multiprocessing.Pool(processes=num_cpus, initializer=_init_worker_ev,
                                   initargs=(matrix_mapped[~empty_idx], empty_value, identity_threshold)) as pool:
             # Simply: Chunksize is between 1 and 64, preferably N / num_cpus / 16,
             # so every CPU gets an 8th of their expected total every time they ask for more work.
@@ -703,7 +679,7 @@ def map_matrix(matrix, map_):
 
 # Idea 3)
 # Multiprocessing with numba jit:
-def init_worker_ev(matrix, empty_value, identity_threshold):
+def _init_worker_ev(matrix, empty_value, identity_threshold):
     global matrix_mapped_global
     matrix_mapped_global = matrix
     L = matrix.shape[1]
@@ -717,7 +693,10 @@ def init_worker_ev(matrix, empty_value, identity_threshold):
     global global_calc_num_clusters_i
     global_calc_num_clusters_i = _global_calc_cluster_factory()
     try:
-        _ = global_calc_num_clusters_i(0)  # Timeout, and numba verbosity
+        start = time.perf_counter()
+        _ = global_calc_num_clusters_i(0)  # Timeout, and numba verbosity?
+        end = time.perf_counter()
+        print(f"Initialising worker took: {end - start:.2f}")
     except Exception as e:
         print("Worker initialisation failed:", e)
         raise e
