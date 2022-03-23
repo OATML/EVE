@@ -42,6 +42,9 @@ class VAE_model(nn.Module):
         self.alphabet_size = alphabet_size if alphabet_size is not None else data.alphabet_size
         self.Neff = Neff if Neff is not None else data.Neff
 
+        self.encoder_parameters=encoder_parameters
+        self.decoder_parameters=decoder_parameters
+
         encoder_parameters['seq_len'] = self.seq_len
         encoder_parameters['alphabet_size'] = self.alphabet_size
         decoder_parameters['seq_len'] = self.seq_len
@@ -238,8 +241,8 @@ class VAE_model(nn.Module):
 
             if training_step % training_parameters['save_model_params_freq'] == 0:
                 self.save(model_checkpoint=training_parameters['model_checkpoint_location']+os.sep+self.model_name+"_step_"+str(training_step),
-                            encoder_parameters=encoder_parameters,
-                            decoder_parameters=decoder_parameters,
+                            encoder_parameters=self.encoder_parameters,
+                            decoder_parameters=self.decoder_parameters,
                             training_parameters=training_parameters)
 
             if training_parameters['use_validation_set'] and training_step % training_parameters['validation_freq'] == 0:
@@ -256,8 +259,8 @@ class VAE_model(nn.Module):
                     best_val_loss = val_neg_ELBO
                     best_model_step_index = training_step
                     self.save(model_checkpoint=training_parameters['model_checkpoint_location']+os.sep+self.model_name+"_best",
-                                encoder_parameters=encoder_parameters,
-                                decoder_parameters=decoder_parameters,
+                                encoder_parameters=self.encoder_parameters,
+                                decoder_parameters=self.decoder_parameters,
                                 training_parameters=training_parameters)
                 self.train()
 

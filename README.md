@@ -1,6 +1,8 @@
+[![DOI](https://zenodo.org/badge/402479185.svg)](https://zenodo.org/badge/latestdoi/402479185)
+
 # Evolutionary model of Variant Effects (EVE)
 
-Please note that we have migrated the official repo to the following address: https://github.com/OATML-Markslab/EVE.
+This is the official code repository for the paper "Disease variant prediction with deep generative models of evolutionary data" (https://www.nature.com/articles/s41586-021-04043-8). This project is a joint collaboration between the Marks lab (https://www.deboramarkslab.com/) and the OATML group (https://oatml.cs.ox.ac.uk/).
 
 ## Overview
 EVE is a set of protein-specific models providing for any single amino acid mutation of interest a score reflecting the propensity of the resulting protein to be pathogenic. For each protein family, a Bayesian VAE learns a distribution over amino acid sequences from evolutionary data. It enables the computation of an evolutionary index for each mutant, which approximates the log-likelihood ratio of the mutant vs the wild type. A global-local mixture of Gaussian Mixture Models separates variants into benign and pathogenic clusters based on that index. The EVE scores reflect probabilistic assignments to the pathogenic cluster.
@@ -20,7 +22,11 @@ MSAs and ClinVar labels are provided for 4 proteins (P53, PTEN, RASH and SCN5A) 
 The only data required to train EVE models and obtain EVE scores from scratch are the multiple sequence alignments (MSAs) for the corresponding proteins. 
 
 ### MSA creation
-We built multiple sequence alignments for each protein family by performing five search iterations of the profile HMM homology search tool Jackhmmer against the UniRef100 database of non-redundant protein sequences (downloaded on April 20th 2020). Please refer to the supplementary notes of the EVE paper (section 3.1.1) for a detailed description of the MSA creation process. 
+
+We build multiple sequence alignments for each protein family by performing five search iterations of the profile HMM homology search tool Jackhmmer against the UniRef100 database of non-redundant protein sequences (downloaded on April 20th 2020). We retrieve sequences that align to at least 50% of the target protein sequence, and columns with at least 70% residue occupancy. This is done using [EVcouplings](https://github.com/debbiemarkslab/EVcouplings/tree/80d30b3d2568ae3327f973346be73cdcd41f678b). 
+
+We explore a range of bit score thresholds, using 0.3 bits per residue as a reference, and select the best possible multiple sequence alignment based on the criteria of maximal coverage of the target protein sequence and sufficient, but not excessive, number of sequences in the alignment (the latter implying an alignment that is too lenient). Specifically, we prioritize alignments with coverage L<sub>cov</sub> ≥ 0.8L, where L is the length of the target protein sequence, and with a total number of sequences N such that 100,000 ≥ N ≥ 10L. If these requirements cannot be met, we sequentially relax them down to L<sub>cov</sub> ≥ 0.7L and N ≤ 200,000. These criteria are met for 97% of alignments. For the remaining 3%, we drop the coverage constraint entirely. Following this procedure, we have so far obtained a set of 3,219 clinically relevant proteins with corresponding evolutionary training data. While we expect the performance of our model to depend on the quality of the multiple sequence alignments, we do not find strong correlation between performance and alignment depth N/L<sub>cov</sub>.
+
 Our github repo provides the MSAs for 4 proteins: P53, PTEN, RASH & SCN5A (see data/MSA). MSAs for all proteins may be accessed on our website (https://evemodel.org/).
 
 ### MSA pre-processing
@@ -62,3 +68,7 @@ If you use this code, please cite the following paper:
   year={2021}
 }
 ```
+
+Links: 
+- Paper: https://www.nature.com/articles/s41586-021-04043-8
+- Pre-print: https://www.biorxiv.org/content/10.1101/2020.12.21.423785v1

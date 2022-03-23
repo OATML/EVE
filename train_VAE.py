@@ -18,6 +18,7 @@ if __name__ == '__main__':
     parser.add_argument('--model_name_suffix', default='Jan1', type=str, help='model checkpoint name will be the protein name followed by this suffix')
     parser.add_argument('--model_parameters_location', type=str, help='Location of VAE model parameters', required=True)
     parser.add_argument('--training_logs_location', type=str, help='Location of VAE model parameters')
+    parser.add_argument('--seed', type=int, default=42, help='Random seed')
     parser.add_argument('--z_dim', type=int, help='Specify a different latent dim than in the params file')
     parser.add_argument('--force_load_weights', action='store_true', help="Force loading of weights from MSA_weights_location (useful if you want to make sure you're using precalculated weights). Will fail if weight file doesn't exist.", default=False)
 
@@ -73,7 +74,7 @@ if __name__ == '__main__':
                     data=data,
                     encoder_parameters=model_params["encoder_parameters"],
                     decoder_parameters=model_params["decoder_parameters"],
-                    random_seed=42
+                    random_seed=args.seed
     )
     model = model.to(model.device)
 
