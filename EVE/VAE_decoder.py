@@ -170,8 +170,7 @@ class VAE_Standard_MLP_decoder(nn.Module):
     """
     Standard MLP decoder class for the VAE model.
     """
-    def __init__(self, seq_len, alphabet_size, hidden_layers_sizes, z_dim, first_hidden_nonlinearity, last_hidden_nonlinearity, dropout_proba,
-                 convolve_output, convolution_depth, include_temperature_scaler, include_sparsity, num_tiles_sparsity):
+    def __init__(self, params):
         """
         Required input parameters:
         - seq_len: (Int) Sequence length of sequence alignment
